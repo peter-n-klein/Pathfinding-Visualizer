@@ -10,6 +10,12 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0a0a1a; }
+    /* Hide scrollbar but allow scrolling */
+    nav::-webkit-scrollbar, .grid-container::-webkit-scrollbar { display: none; }
+    nav, .grid-container { -ms-overflow-style: none; scrollbar-width: none; }
+    @media (max-width: 768px) {
+      nav { flex-wrap: nowrap !important; }
+    }
   </style>
 </head>
 <body>
@@ -559,6 +565,30 @@ function PathfindingVisualizer() {
   const [showFlowVectors, setShowFlowVectors] = useState(true);
   const [hasVisualized, setHasVisualized] = useState(false);
   const [wallEditMode, setWallEditMode] = useState(null);
+  const [algorithmDropdownOpen, setAlgorithmDropdownOpen] = useState(false);
+  const algorithmDropdownRef = useRef(null);
+  
+  const algorithmInfo = {
+    dijkstra: { name: "Dijkstra's", optimal: true, complete: true, desc: "Explores uniformly by cost — guaranteed shortest path", icon: '🎯' },
+    aStar: { name: 'A* Search', optimal: 'w≤1', complete: true, desc: 'Cost + heuristic guided — optimal when weight ≤ 1', icon: '⭐' },
+    greedyBestFirst: { name: 'Greedy Best-First', optimal: false, complete: true, desc: 'Pure heuristic — very fast but often suboptimal', icon: '🏃' },
+    swarm: { name: 'Swarm', optimal: false, complete: true, desc: 'Dynamic weight decreases over iterations', icon: '🐝' },
+    convergentSwarm: { name: 'Convergent Swarm', optimal: false, complete: true, desc: 'Weight based on progress toward goal', icon: '🌀' },
+    bidirectionalSwarm: { name: 'Bidirectional Swarm', optimal: false, complete: true, desc: 'Searches from both start and end simultaneously', icon: '↔️' },
+    flowField: { name: 'Flow Field', optimal: true, complete: true, desc: 'Vector field pointing to goal — great for many units', icon: '🌊' },
+    bfs: { name: 'Breadth-First (BFS)', optimal: 'unweighted', complete: true, desc: 'Level-by-level — optimal for uniform cost', icon: '📊' },
+    dfs: { name: 'Depth-First (DFS)', optimal: false, complete: false, desc: 'Goes deep first — fast but unpredictable paths', icon: '🔍' },
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (algorithmDropdownRef.current && !algorithmDropdownRef.current.contains(e.target)) {
+        setAlgorithmDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const svgRef = useRef(null);
   const animationRef = useRef([]);
@@ -821,6 +851,42 @@ function PathfindingVisualizer() {
   const handleMouseDown = (q, r) => handleCellInteraction(q, r, true);
   const handleMouseEnter = (q, r) => { setHoveredHex({ q, r }); if (isDragging) handleCellInteraction(q, r, false); };
   const handleMouseUp = () => { setIsDragging(null); setWallEditMode(null); };
+  
+  const handleTouchStart = useCallback((e) => {
+    if (isRunning) return;
+    const touch = e.touches[0];
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = SVG_WIDTH / rect.width;
+    const scaleY = SVG_HEIGHT / rect.height;
+    const x = (touch.clientX - rect.left) * scaleX - offsetX;
+    const y = (touch.clientY - rect.top) * scaleY - offsetY;
+    const cell = gridType === 'hex' ? GridUtils.axialRound((Math.sqrt(3)/3 * x - 1/3 * y) / CELL_SIZE, (2/3 * y) / CELL_SIZE) : { q: Math.round(x / (CELL_SIZE * 2)), r: Math.round(y / (CELL_SIZE * 2)) };
+    const key = GridUtils.cellKey(cell.q, cell.r);
+    const node = grid.get(key);
+    if (!node) return;
+    if (node.isStart) { setIsDragging('start'); e.preventDefault(); }
+    else if (node.isEnd) { setIsDragging('end'); e.preventDefault(); }
+    else { setIsDragging('wall'); setWallEditMode(!node.isWall ? 'add' : 'remove'); setGrid(prev => { const newGrid = new Map(prev); newGrid.set(key, { ...node, isWall: !node.isWall }); return newGrid; }); e.preventDefault(); }
+  }, [grid, isRunning, gridType, CELL_SIZE, offsetX, offsetY]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!isDragging || isRunning) return;
+    const touch = e.touches[0];
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = SVG_WIDTH / rect.width;
+    const scaleY = SVG_HEIGHT / rect.height;
+    const x = (touch.clientX - rect.left) * scaleX - offsetX;
+    const y = (touch.clientY - rect.top) * scaleY - offsetY;
+    const cell = gridType === 'hex' ? GridUtils.axialRound((Math.sqrt(3)/3 * x - 1/3 * y) / CELL_SIZE, (2/3 * y) / CELL_SIZE) : { q: Math.round(x / (CELL_SIZE * 2)), r: Math.round(y / (CELL_SIZE * 2)) };
+    handleCellInteraction(cell.q, cell.r, false);
+    e.preventDefault();
+  }, [isDragging, isRunning, gridType, CELL_SIZE, offsetX, offsetY, handleCellInteraction]);
+
+  const handleTouchEnd = useCallback(() => { setIsDragging(null); setWallEditMode(null); }, []);
   const generateMaze = useCallback(() => { clearPath(); setHasVisualized(false); setGrid(prev => { const newGrid = new Map(prev); for (const [key, node] of newGrid) if (!node.isStart && !node.isEnd) newGrid.set(key, { ...node, isWall: Math.random() < 0.3 }); return newGrid; }); }, [clearPath]);
   const isInStartFormation = useCallback((q, r) => { if (unitSize === 1) return q === startNode.q && r === startNode.r; return GridUtils.getFormationCells(gridType, startNode.q, startNode.r, unitSize).some(c => c.q === q && c.r === r); }, [startNode, unitSize, gridType]);
   const isInEndFormation = useCallback((q, r) => { if (unitSize === 1) return q === endNode.q && r === endNode.r; return GridUtils.getFormationCells(gridType, endNode.q, endNode.r, unitSize).some(c => c.q === q && c.r === r); }, [endNode, unitSize, gridType]);
@@ -875,10 +941,45 @@ function PathfindingVisualizer() {
 
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', background: '#0a0a1a', minHeight: '100vh', color: '#e8e8e8' }}>
-      <nav style={{ background: 'linear-gradient(90deg, #1a1a2e, #16213e)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid #0f3460' }}>
+      <nav style={{ background: 'linear-gradient(90deg, #1a1a2e, #16213e)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid #0f3460', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 100, overflow: 'visible' }}>
         <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, background: 'linear-gradient(90deg, #64b5f6, #ffc107)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginRight: '16px' }}>⬡ Pathfinding Visualizer</h1>
         <select value={gridType} onChange={(e) => setGridType(e.target.value)} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}><option value="hex">Hex Grid (6-dir)</option><option value="square4">Square (4-dir)</option><option value="square8">Square (8-dir)</option></select>
-        <select value={selectedAlgorithm} onChange={(e) => setSelectedAlgorithm(e.target.value)} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}><option value="dijkstra">Dijkstra's</option><option value="aStar">A* Search</option><option value="greedyBestFirst">Greedy Best-first</option><option value="swarm">Swarm</option><option value="convergentSwarm">Convergent Swarm</option><option value="bidirectionalSwarm">Bidirectional Swarm</option><option value="flowField">Flow Field</option><option value="bfs">Breadth-first</option><option value="dfs">Depth-first</option></select>
+        <div ref={algorithmDropdownRef} style={{ position: 'relative', zIndex: 1000 }}>
+          <button onClick={() => !isRunning && setAlgorithmDropdownOpen(!algorithmDropdownOpen)} disabled={isRunning}
+            style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', minWidth: '220px', justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{algorithmInfo[selectedAlgorithm].icon}</span>
+              <span>{algorithmInfo[selectedAlgorithm].name}</span>
+              <span style={{ fontSize: '9px', padding: '2px 5px', borderRadius: '3px', background: algorithmInfo[selectedAlgorithm].optimal === true ? 'rgba(76, 175, 80, 0.3)' : algorithmInfo[selectedAlgorithm].optimal ? 'rgba(255, 193, 7, 0.3)' : 'rgba(238, 119, 51, 0.3)', color: algorithmInfo[selectedAlgorithm].optimal === true ? '#4caf50' : algorithmInfo[selectedAlgorithm].optimal ? '#ffc107' : '#EE7733' }}>
+                {algorithmInfo[selectedAlgorithm].optimal === true ? '✓ Optimal' : algorithmInfo[selectedAlgorithm].optimal ? `✓ ${algorithmInfo[selectedAlgorithm].optimal}` : '✗ Suboptimal'}
+              </span>
+            </span>
+            <span style={{ fontSize: '10px', marginLeft: '4px' }}>▼</span>
+          </button>
+          {algorithmDropdownOpen && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: '#1a1a2e', border: '1px solid #0f3460', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.8)', zIndex: 9999, minWidth: '340px', overflow: 'hidden' }}>
+              {Object.entries(algorithmInfo).map(([key, info]) => (
+                <div key={key} onClick={() => { setSelectedAlgorithm(key); setAlgorithmDropdownOpen(false); }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', background: selectedAlgorithm === key ? 'rgba(100, 181, 246, 0.2)' : 'transparent', borderLeft: selectedAlgorithm === key ? '3px solid #64b5f6' : '3px solid transparent' }}
+                  onMouseEnter={(e) => { if (selectedAlgorithm !== key) e.currentTarget.style.background = 'rgba(100, 181, 246, 0.1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = selectedAlgorithm === key ? 'rgba(100, 181, 246, 0.2)' : 'transparent'; }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, color: '#e8e8e8' }}>
+                      <span>{info.icon}</span><span>{info.name}</span>
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '3px', background: info.optimal === true ? 'rgba(76, 175, 80, 0.3)' : info.optimal ? 'rgba(255, 193, 7, 0.3)' : 'rgba(238, 119, 51, 0.3)', color: info.optimal === true ? '#4caf50' : info.optimal ? '#ffc107' : '#EE7733' }}>
+                        {info.optimal === true ? '✓ Optimal' : info.optimal ? `✓ ${info.optimal}` : '✗ Suboptimal'}
+                      </span>
+                      {!info.complete && <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '3px', background: 'rgba(238, 119, 51, 0.3)', color: '#EE7733' }}>Incomplete</span>}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#90a4ae', paddingLeft: '26px' }}>{info.desc}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {['aStar', 'greedyBestFirst', 'swarm', 'convergentSwarm', 'bidirectionalSwarm'].includes(selectedAlgorithm) && <select value={heuristic} onChange={(e) => setHeuristic(e.target.value)} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{gridConfig.heuristics.map(h => <option key={h} value={h}>{getHeuristicLabel(h)}</option>)}</select>}
         {selectedAlgorithm === 'aStar' && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(100, 181, 246, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #1e88e5' }}><span style={{ fontSize: '10px', color: '#90a4ae' }}>w:</span><input type="range" min="0" max="10" step="0.1" value={heuristicWeight} onChange={(e) => setHeuristicWeight(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '80px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#88CCEE' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: heuristicWeight <= 1 ? '#88CCEE' : heuristicWeight < 3 ? '#DDAA00' : '#EE7733', minWidth: '30px' }}>{heuristicWeight >= 10 ? '∞' : heuristicWeight.toFixed(1)}</span></div>}
         <button onClick={runAlgorithm} disabled={isRunning} style={{ background: 'linear-gradient(90deg, #0077BB, #88CCEE)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 20px', cursor: isRunning ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '14px', boxShadow: '0 2px 8px rgba(0, 119, 187, 0.4)' }}>{isRunning ? 'Running...' : 'Visualize!'}</button>
@@ -886,7 +987,7 @@ function PathfindingVisualizer() {
         <button onClick={clearBoard} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Clear Board</button>
         <select value={speed} onChange={(e) => setSpeed(e.target.value)} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}><option value="fast">Fast</option><option value="average">Medium</option><option value="slow">Slow</option></select>
       </nav>
-      <nav style={{ background: 'rgba(15, 52, 96, 0.8)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid #0f3460' }}>
+      <nav style={{ background: 'rgba(15, 52, 96, 0.8)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid #0f3460', overflowX: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 50 }}>
         <button onClick={generateMaze} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Random Walls</button>
         <div style={{ width: '1px', height: '24px', background: '#0f3460' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(170, 68, 153, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #AA4499' }}><span style={{ fontSize: '12px', color: '#AA4499' }}>Unit:</span>{gridConfig.unitSizes.map(size => <button key={size} onClick={() => setUnitSize(size)} disabled={isRunning} style={{ background: unitSize === size ? '#AA4499' : '#16213e', color: '#e8e8e8', border: `1px solid ${unitSize === size ? '#AA4499' : '#0f3460'}`, borderRadius: '4px', padding: '4px 8px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '11px', fontWeight: unitSize === size ? 'bold' : 'normal' }}>{gridConfig.unitLabels[size]}</button>)}</div>
@@ -897,12 +998,243 @@ function PathfindingVisualizer() {
         <button onClick={() => { setShowCostOverlay(!showCostOverlay); if (!showCostOverlay && selectedAlgorithm === 'flowField') setShowFlowVectors(false); }} style={{ background: showCostOverlay ? '#e91e63' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showCostOverlay ? '💰 Costs ✓' : '💰 Costs'}</button>
         {selectedAlgorithm === 'flowField' && <button onClick={() => { setShowFlowVectors(!showFlowVectors); if (!showFlowVectors) setShowCostOverlay(false); }} style={{ background: showFlowVectors ? '#00bcd4' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showFlowVectors ? '→ Arrows ✓' : '→ Arrows'}</button>}
       </nav>
-      <div style={{ background: 'rgba(22, 33, 62, 0.9)', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid #0f3460', fontSize: '12px' }}>
+      <div style={{ background: 'rgba(22, 33, 62, 0.9)', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid #0f3460', fontSize: '12px', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#0077BB', borderRadius: 2 }}></span> Start</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#EE7733', borderRadius: 2 }}></span> Target</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#0d0d1a', borderRadius: 2, border: '1px solid #333' }}></span> Wall</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#88CCEE', borderRadius: 2 }}></span> Visited</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#FFDD44', borderRadius: 2 }}></span> Path</span></div>
         <div style={{ display: 'flex', gap: '16px' }}><span>Visited: <strong style={{ color: '#88CCEE' }}>{stats.visited}</strong></span><span>Path: <strong style={{ color: '#FFDD44' }}>{stats.pathLength}</strong></span><span>Time: <strong style={{ color: '#ffc107' }}>{stats.time}ms</strong></span></div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '20px', background: '#0a0a1a', userSelect: 'none' }}><svg ref={svgRef} width={SVG_WIDTH} height={SVG_HEIGHT} style={{ background: '#0d0d1a', borderRadius: '8px', userSelect: 'none' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onDragStart={(e) => e.preventDefault()}>{Array.from(grid.values()).map(node => renderCell(node))}</svg></div>
-      <div style={{ background: 'rgba(15, 52, 96, 0.6)', padding: '12px 16px', textAlign: 'center', fontSize: '12px', color: '#90a4ae' }}><strong style={{ color: '#88CCEE' }}>{gridType === 'hex' ? 'Hex Grid' : gridType === 'square4' ? 'Square (4-dir)' : 'Square (8-dir)'}</strong>{' • '}<strong style={{ color: '#FFDD44' }}>{selectedAlgorithm === 'aStar' ? `A* (w=${heuristicWeight >= 10 ? '∞' : heuristicWeight.toFixed(1)})` : selectedAlgorithm}</strong>{' • '}Heuristic: <strong style={{ color: '#AA4499' }}>{getHeuristicLabel(heuristic)}</strong>{unitSize > 1 && <>{' • '}Unit: <strong style={{ color: '#AA4499' }}>{gridConfig.unitLabels[unitSize]}</strong>{canSnake && <> (Snake: {snakePenalty.toFixed(1)})</>}</>}</div>
+      <div className="grid-container" style={{ display: 'flex', justifyContent: 'center', padding: '10px', background: '#0a0a1a', userSelect: 'none', overflow: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}><svg ref={svgRef} width={SVG_WIDTH} height={SVG_HEIGHT} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} style={{ background: '#0d0d1a', borderRadius: '8px', userSelect: 'none', flexShrink: 0, touchAction: isDragging ? 'none' : 'pan-x pan-y' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onDragStart={(e) => e.preventDefault()}>{Array.from(grid.values()).map(node => renderCell(node))}</svg></div>
+      
+      {/* Formula Display */}
+      <div style={{ background: 'linear-gradient(180deg, #0d1520, #0a0a1a)', padding: '20px', borderTop: '1px solid #0f3460' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <h3 style={{ color: '#64b5f6', marginBottom: '16px', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            📐 Algorithm: <span style={{ color: '#FFDD44' }}>{
+              selectedAlgorithm === 'aStar' ? 'A* Search' :
+              selectedAlgorithm === 'dijkstra' ? "Dijkstra's Algorithm" :
+              selectedAlgorithm === 'greedyBestFirst' ? 'Greedy Best-First Search' :
+              selectedAlgorithm === 'bfs' ? 'Breadth-First Search (BFS)' :
+              selectedAlgorithm === 'dfs' ? 'Depth-First Search (DFS)' :
+              selectedAlgorithm === 'swarm' ? 'Swarm Algorithm' :
+              selectedAlgorithm === 'convergentSwarm' ? 'Convergent Swarm' :
+              selectedAlgorithm === 'bidirectionalSwarm' ? 'Bidirectional Swarm' :
+              selectedAlgorithm === 'flowField' ? 'Flow Field' : selectedAlgorithm
+            }</span>
+          </h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+            {/* Core Formula */}
+            <div style={{ background: 'rgba(100, 181, 246, 0.1)', borderRadius: '8px', padding: '16px', border: '1px solid #1e88e5' }}>
+              <h4 style={{ color: '#90caf9', marginBottom: '12px', fontSize: '14px' }}>Core Formula</h4>
+              <div style={{ fontFamily: 'monospace', fontSize: '15px', color: '#fff', marginBottom: '12px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+                {selectedAlgorithm === 'aStar' && <>f(n) = g(n) + w × h(n)</>}
+                {selectedAlgorithm === 'dijkstra' && <>f(n) = g(n)</>}
+                {selectedAlgorithm === 'greedyBestFirst' && <>f(n) = h(n)</>}
+                {selectedAlgorithm === 'bfs' && <>Queue: FIFO order</>}
+                {selectedAlgorithm === 'dfs' && <>Stack: LIFO order</>}
+                {selectedAlgorithm === 'swarm' && <>f(n) = g(n) + w(i) × h(n)<br/>w(i) = 1 + (h/i) × 2</>}
+                {selectedAlgorithm === 'convergentSwarm' && <>f(n) = g(n) + w(p) × h(n)<br/>w(p) = 1 + (1 - p) × 3</>}
+                {selectedAlgorithm === 'bidirectionalSwarm' && <>Forward: f(n) = g(n) + h(n→end)<br/>Backward: f(n) = g(n) + h(n→start)</>}
+                {selectedAlgorithm === 'flowField' && <>cost(n) = min(cost(neighbors)) + move_cost</>}
+              </div>
+              <div style={{ fontSize: '12px', color: '#b0bec5', lineHeight: '1.6' }}>
+                {selectedAlgorithm === 'aStar' && <>
+                  <div><strong style={{ color: '#88CCEE' }}>f(n)</strong> = total estimated cost through node n</div>
+                  <div><strong style={{ color: '#88CCEE' }}>g(n)</strong> = actual cost from start to n</div>
+                  <div><strong style={{ color: '#88CCEE' }}>h(n)</strong> = heuristic estimate from n to goal</div>
+                  <div><strong style={{ color: '#88CCEE' }}>w</strong> = heuristic weight ({heuristicWeight >= 10 ? '∞' : heuristicWeight.toFixed(1)}) — higher values favor speed over optimality</div>
+                </>}
+                {selectedAlgorithm === 'dijkstra' && <>
+                  <div><strong style={{ color: '#88CCEE' }}>f(n)</strong> = priority for expansion</div>
+                  <div><strong style={{ color: '#88CCEE' }}>g(n)</strong> = actual cost from start to n</div>
+                  <div>No heuristic — explores uniformly in all directions</div>
+                  <div style={{ color: '#FFDD44', marginTop: '4px' }}>✓ Guarantees optimal path</div>
+                </>}
+                {selectedAlgorithm === 'greedyBestFirst' && <>
+                  <div><strong style={{ color: '#88CCEE' }}>f(n)</strong> = priority based purely on heuristic</div>
+                  <div><strong style={{ color: '#88CCEE' }}>h(n)</strong> = estimated distance to goal</div>
+                  <div>Ignores path cost — very fast but may find suboptimal paths</div>
+                  <div style={{ color: '#EE7733', marginTop: '4px' }}>⚠ Does not guarantee optimal path</div>
+                </>}
+                {selectedAlgorithm === 'bfs' && <>
+                  <div>Explores nodes level-by-level using a <strong style={{ color: '#88CCEE' }}>queue</strong></div>
+                  <div>First-In-First-Out: oldest discovered nodes explored first</div>
+                  <div>Treats all edges as equal cost</div>
+                  <div style={{ color: '#FFDD44', marginTop: '4px' }}>✓ Guarantees shortest path (by hop count)</div>
+                </>}
+                {selectedAlgorithm === 'dfs' && <>
+                  <div>Explores as deep as possible using a <strong style={{ color: '#88CCEE' }}>stack</strong></div>
+                  <div>Last-In-First-Out: most recent nodes explored first</div>
+                  <div>Memory efficient but unpredictable path quality</div>
+                  <div style={{ color: '#EE7733', marginTop: '4px' }}>⚠ Usually finds suboptimal paths</div>
+                </>}
+                {selectedAlgorithm === 'swarm' && <>
+                  <div><strong style={{ color: '#88CCEE' }}>w(i)</strong> = dynamic weight based on iteration count</div>
+                  <div><strong style={{ color: '#88CCEE' }}>i</strong> = current iteration number</div>
+                  <div>Early: high heuristic weight (greedy) → Late: balanced</div>
+                  <div style={{ color: '#AA4499', marginTop: '4px' }}>Mimics swarm behavior converging on target</div>
+                </>}
+                {selectedAlgorithm === 'convergentSwarm' && <>
+                  <div><strong style={{ color: '#88CCEE' }}>w(p)</strong> = weight based on progress toward goal</div>
+                  <div><strong style={{ color: '#88CCEE' }}>p</strong> = progress ratio (0 = at start, 1 = at goal)</div>
+                  <div>Far from goal: greedy → Near goal: careful</div>
+                  <div style={{ color: '#AA4499', marginTop: '4px' }}>Accelerates then refines approach</div>
+                </>}
+                {selectedAlgorithm === 'bidirectionalSwarm' && <>
+                  <div>Two simultaneous searches from start and end</div>
+                  <div>Searches meet in the middle and merge paths</div>
+                  <div>Can dramatically reduce search space</div>
+                  <div style={{ color: '#FFDD44', marginTop: '4px' }}>✓ Often faster than unidirectional search</div>
+                </>}
+                {selectedAlgorithm === 'flowField' && <>
+                  <div>Computes <strong style={{ color: '#88CCEE' }}>cost field</strong> from goal outward</div>
+                  <div>Each cell stores direction to lowest-cost neighbor</div>
+                  <div>Any unit can follow arrows to reach goal</div>
+                  <div style={{ color: '#FFDD44', marginTop: '4px' }}>✓ Efficient for many units with same destination</div>
+                </>}
+              </div>
+            </div>
+
+            {/* Heuristic Function */}
+            <div style={{ background: 'rgba(170, 68, 153, 0.1)', borderRadius: '8px', padding: '16px', border: '1px solid #AA4499' }}>
+              <h4 style={{ color: '#ce93d8', marginBottom: '12px', fontSize: '14px' }}>Heuristic: {getHeuristicLabel(heuristic)}</h4>
+              <div style={{ fontFamily: 'monospace', fontSize: '15px', color: '#fff', marginBottom: '12px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+                {heuristic === 'hex' && <>h = max(|Δx|, |Δy|, |Δz|)<br/><span style={{ fontSize: '12px', color: '#b0bec5' }}>where x+y+z=0 (cube coords)</span></>}
+                {heuristic === 'manhattan' && <>h = |x₁ - x₂| + |y₁ - y₂|</>}
+                {heuristic === 'chebyshev' && <>h = max(|x₁ - x₂|, |y₁ - y₂|)</>}
+                {heuristic === 'euclidean' && <>h = √((x₁-x₂)² + (y₁-y₂)²)</>}
+              </div>
+              <div style={{ fontSize: '12px', color: '#b0bec5', lineHeight: '1.6' }}>
+                {heuristic === 'hex' && <>
+                  <div>Converts axial (q,r) to cube coordinates (x,y,z)</div>
+                  <div>Cube constraint: x + y + z = 0</div>
+                  <div>Distance = maximum absolute difference</div>
+                  <div style={{ color: '#FFDD44', marginTop: '4px' }}>✓ Exact distance for hex grids</div>
+                </>}
+                {heuristic === 'manhattan' && <>
+                  <div>Sum of horizontal and vertical distances</div>
+                  <div>Also called "taxicab" or "L1" distance</div>
+                  <div>Assumes only cardinal (4-directional) movement</div>
+                  <div style={{ color: gridType === 'square4' ? '#FFDD44' : '#EE7733', marginTop: '4px' }}>
+                    {gridType === 'square4' ? '✓ Optimal for 4-directional grids' : '⚠ Overestimates for diagonal movement'}
+                  </div>
+                </>}
+                {heuristic === 'chebyshev' && <>
+                  <div>Maximum of horizontal or vertical distance</div>
+                  <div>Also called "chessboard" distance</div>
+                  <div>Assumes diagonal moves cost same as cardinal</div>
+                  <div style={{ color: gridType === 'square8' ? '#FFDD44' : '#EE7733', marginTop: '4px' }}>
+                    {gridType === 'square8' ? '✓ Good for 8-directional grids' : '⚠ May underestimate without diagonals'}
+                  </div>
+                </>}
+                {heuristic === 'euclidean' && <>
+                  <div>Straight-line distance (Pythagorean theorem)</div>
+                  <div>Most accurate real-world distance</div>
+                  <div>Never overestimates (admissible)</div>
+                  <div style={{ color: '#FFDD44', marginTop: '4px' }}>✓ Admissible for any grid type</div>
+                </>}
+              </div>
+            </div>
+
+            {/* Movement Cost */}
+            <div style={{ background: 'rgba(238, 119, 51, 0.1)', borderRadius: '8px', padding: '16px', border: '1px solid #EE7733' }}>
+              <h4 style={{ color: '#ffab91', marginBottom: '12px', fontSize: '14px' }}>Movement Cost</h4>
+              <div style={{ fontFamily: 'monospace', fontSize: '15px', color: '#fff', marginBottom: '12px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+                {gridType === 'hex' && <>cost = 1.0 per hex</>}
+                {gridType === 'square4' && <>cost = 1.0 per cell</>}
+                {gridType === 'square8' && <>cardinal = 1.0<br/>diagonal = √2 ≈ 1.414</>}
+              </div>
+              <div style={{ fontSize: '12px', color: '#b0bec5', lineHeight: '1.6' }}>
+                {gridType === 'hex' && <>
+                  <div>All 6 hex directions have equal cost</div>
+                  <div>Hex grids have uniform distance in all directions</div>
+                  <div>No diagonal penalty needed</div>
+                </>}
+                {gridType === 'square4' && <>
+                  <div>4 cardinal directions: ↑ ↓ ← →</div>
+                  <div>Each step costs 1.0 unit</div>
+                  <div>No diagonal movement allowed</div>
+                </>}
+                {gridType === 'square8' && <>
+                  <div>8 directions: cardinals + diagonals</div>
+                  <div>Diagonal = √(1² + 1²) = √2 ≈ 1.414</div>
+                  <div>Accurate Euclidean movement costs</div>
+                </>}
+              </div>
+            </div>
+
+            {/* Formation/Snake Info - only show if unit size > 1 */}
+            {unitSize > 1 && (
+              <div style={{ background: 'rgba(221, 170, 0, 0.1)', borderRadius: '8px', padding: '16px', border: '1px solid #DDAA00' }}>
+                <h4 style={{ color: '#ffeb3b', marginBottom: '12px', fontSize: '14px' }}>Formation: {gridConfig.unitLabels[unitSize]}</h4>
+                <div style={{ fontFamily: 'monospace', fontSize: '15px', color: '#fff', marginBottom: '12px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
+                  clearance_cost = blocked_neighbors × 0.1
+                  {canSnake && <><br/>snake_cost = {snakePenalty.toFixed(1)} (first) | {(snakePenalty * 0.15).toFixed(2)} (cont.)</>}
+                </div>
+                <div style={{ fontSize: '12px', color: '#b0bec5', lineHeight: '1.6' }}>
+                  <div><strong style={{ color: '#DDAA00' }}>Formation cells:</strong> {unitSize} cells move together</div>
+                  <div><strong style={{ color: '#DDAA00' }}>Clearance penalty:</strong> prefers open spaces</div>
+                  {canSnake ? <>
+                    <div><strong style={{ color: '#DDAA00' }}>Snake mode:</strong> enabled</div>
+                    <div>• First snake move: +{snakePenalty.toFixed(1)} cost</div>
+                    <div>• Continued snaking: +{(snakePenalty * 0.15).toFixed(2)} cost</div>
+                    <div>• Reforming bonus: +{(snakePenalty * 0.3).toFixed(2)} cost</div>
+                    <div style={{ color: '#fff', marginTop: '4px' }}>White path = snaking through tight spaces</div>
+                  </> : <>
+                    <div><strong style={{ color: '#DDAA00' }}>Snake mode:</strong> disabled</div>
+                    <div>Formation must fit completely in all spaces</div>
+                  </>}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Algorithm Characteristics */}
+          <div style={{ marginTop: '20px', padding: '16px', background: 'rgba(136, 204, 238, 0.1)', borderRadius: '8px', border: '1px solid #0f3460' }}>
+            <h4 style={{ color: '#88CCEE', marginBottom: '12px', fontSize: '14px' }}>Algorithm Characteristics</h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#b0bec5' }}>Optimal:</span>
+                <span style={{ color: ['dijkstra', 'bfs'].includes(selectedAlgorithm) || (selectedAlgorithm === 'aStar' && heuristicWeight <= 1) ? '#4caf50' : '#EE7733', fontWeight: 'bold' }}>
+                  {['dijkstra', 'bfs'].includes(selectedAlgorithm) || (selectedAlgorithm === 'aStar' && heuristicWeight <= 1) ? 'Yes' : selectedAlgorithm === 'aStar' ? 'w≤1 only' : 'No'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#b0bec5' }}>Complete:</span>
+                <span style={{ color: selectedAlgorithm === 'dfs' ? '#EE7733' : '#4caf50', fontWeight: 'bold' }}>
+                  {selectedAlgorithm === 'dfs' ? 'No (may loop)' : 'Yes'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#b0bec5' }}>Time Complexity:</span>
+                <span style={{ color: '#88CCEE', fontFamily: 'monospace' }}>
+                  {selectedAlgorithm === 'dijkstra' ? 'O((V+E) log V)' :
+                   selectedAlgorithm === 'aStar' ? 'O(b^d) worst' :
+                   selectedAlgorithm === 'bfs' ? 'O(V + E)' :
+                   selectedAlgorithm === 'dfs' ? 'O(V + E)' :
+                   selectedAlgorithm === 'flowField' ? 'O(V log V)' :
+                   'O(b^d)'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#b0bec5' }}>Space:</span>
+                <span style={{ color: '#88CCEE', fontFamily: 'monospace' }}>
+                  {selectedAlgorithm === 'dfs' ? 'O(d)' :
+                   selectedAlgorithm === 'flowField' ? 'O(V)' :
+                   'O(V)'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#b0bec5' }}>Data Structure:</span>
+                <span style={{ color: '#ce93d8' }}>
+                  {selectedAlgorithm === 'bfs' ? 'Queue (FIFO)' :
+                   selectedAlgorithm === 'dfs' ? 'Stack (LIFO)' :
+                   'Priority Queue (Min-Heap)'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
