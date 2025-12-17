@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pathfinding Visualizer</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a1a; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useRef, useCallback, useEffect } = React;
+
+const GridUtils = {
+  CONFIGS: {
+    hex: {
+      directions: [
+        { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
+        { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 },
+      ],
+      formations: {
+        1: [{ q: 0, r: 0 }],
+        3: [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 0, r: 1 }],
+        7: [
+          { q: 0, r: 0 }, { q: 1, r: 0 }, { q: 1, r: -1 },
+          { q: 0, r: -1 }, { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
+        ],
+      },
+      unitSizes: [1, 3, 7],
+      unitLabels: { 1: '1⬡', 3: '3△', 7: '7⬢' },
+      heuristics: ['hex', 'euclidean'],
+      defaultHeuristic: 'hex',
+    },
+    square4: {
+      directions: [
+        { q: 0, r: -1 }, { q: 1, r: 0 }, { q: 0, r: 1 }, { q: -1, r: 0 },
+      ],
+      formations: {
+        1: [{ q: 0, r: 0 }],
+        4: [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 0, r: 1 }, { q: 1, r: 1 }],
+        9: [
+          { q: -1, r: -1 }, { q: 0, r: -1 }, { q: 1, r: -1 },
+          { q: -1, r: 0 }, { q: 0, r: 0 }, { q: 1, r: 0 },
+          { q: -1, r: 1 }, { q: 0, r: 1 }, { q: 1, r: 1 }
+        ],
+      },
+      unitSizes: [1, 4, 9],
+      unitLabels: { 1: '1□', 4: '2×2', 9: '3×3' },
+      heuristics: ['manhattan', 'euclidean'],
+      defaultHeuristic: 'manhattan',
+    },
+    square8: {
+      directions: [
+        { q: 0, r: -1 }, { q: 1, r: -1 }, { q: 1, r: 0 }, { q: 1, r: 1 },
+        { q: 0, r: 1 }, { q: -1, r: 1 }, { q: -1, r: 0 }, { q: -1, r: -1 },
+      ],
+      formations: {
+        1: [{ q: 0, r: 0 }],
+        4: [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 0, r: 1 }, { q: 1, r: 1 }],
+        9: [
+          { q: -1, r: -1 }, { q: 0, r: -1 }, { q: 1, r: -1 },
+          { q: -1, r: 0 }, { q: 0, r: 0 }, { q: 1, r: 0 },
+          { q: -1, r: 1 }, { q: 0, r: 1 }, { q: 1, r: 1 }
+        ],
+      },
+      unitSizes: [1, 4, 9],
+      unitLabels: { 1: '1□', 4: '2×2', 9: '3×3' },
+      heuristics: ['chebyshev', 'euclidean', 'manhattan'],
+      defaultHeuristic: 'chebyshev',
+    },
+  },
+
+  getConfig: (gridType) => GridUtils.CONFIGS[gridType] || GridUtils.CONFIGS.hex,
+  getDirections: (gridType) => GridUtils.getConfig(gridType).directions,
+  getFormationOffsets: (gridType, size) => {
+    const config = GridUtils.getConfig(gridType);
+    return config.formations[size] || config.formations[1];
+  },
+  getFormationCells: (gridType, centerQ, centerR, size) => {
+    const offsets = GridUtils.getFormationOffsets(gridType, size);
+    return offsets.map(offset => ({ q: centerQ + offset.q, r: centerR + offset.r }));
+  },
+  canFormationFit: (grid, gridType, centerQ, centerR, size, ignoreKeys = new Set()) => {
+    const cells = GridUtils.getFormationCells(gridType, centerQ, centerR, size);
+    for (const cell of cells) {
+      const key = GridUtils.cellKey(cell.q, cell.r);
+      if (ignoreKeys.has(key)) continue;
+      const node = grid.get(key);
+      if (!node || node.isWall) return false;
+    }
+    return true;
+  },
+  getFormationClearance: (grid, gridType, centerQ, centerR, size) => {
+    if (size === 1) return 0;
+    const cells = GridUtils.getFormationCells(gridType, centerQ, centerR, size);
+    let blockedNeighbors = 0;
+    for (const cell of cells) {
+      const neighbors = GridUtils.getNeighbors(gridType, cell.q, cell.r);
+      for (const n of neighbors) {
+        const key = GridUtils.cellKey(n.q, n.r);
+        const node = grid.get(key);
+        if (!node || node.isWall) blockedNeighbors++;
+      }
+    }
+    return blockedNeighbors * 0.1;
+  },
+  cellKey: (q, r) => `${q},${r}`,
+  parseKey: (key) => { const [q, r] = key.split(',').map(Number); return { q, r }; },
+  getNeighbors: (gridType, q, r) => {
+    const dirs = GridUtils.getDirections(gridType);
+    return dirs.map(d => ({ q: q + d.q, r: r + d.r }));
+  },
+  axialToCube: (q, r) => ({ x: q, y: -q - r, z: r }),
+  cubeDistance: (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z)),
+  hexDistance: (q1, r1, q2, r2) => {
+    const a = GridUtils.axialToCube(q1, r1);
+    const b = GridUtils.axialToCube(q2, r2);
+    return GridUtils.cubeDistance(a, b);
+  },
+  hexToPixel: (q, r, size) => ({
+    x: size * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r),
+    y: size * (3 / 2 * r)
+  }),
+  axialRound: (q, r) => {
+    const cube = GridUtils.axialToCube(q, r);
+    let rx = Math.round(cube.x), ry = Math.round(cube.y), rz = Math.round(cube.z);
+    const xDiff = Math.abs(rx - cube.x), yDiff = Math.abs(ry - cube.y), zDiff = Math.abs(rz - cube.z);
+    if (xDiff > yDiff && xDiff > zDiff) rx = -ry - rz;
+    else if (yDiff > zDiff) ry = -rx - rz;
+    else rz = -rx - ry;
+    return { q: rx, r: rz };
+  },
+  hexCorners: (cx, cy, size) => {
+    const corners = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 180 * (60 * i - 30);
+      corners.push({ x: cx + size * Math.cos(angle), y: cy + size * Math.sin(angle) });
+    }
+    return corners;
+  },
+  squareToPixel: (q, r, size) => ({ x: q * size * 2, y: r * size * 2 }),
+  cellToPixel: (gridType, q, r, size) => gridType === 'hex' ? GridUtils.hexToPixel(q, r, size) : GridUtils.squareToPixel(q, r, size),
+  manhattanDistance: (q1, r1, q2, r2) => Math.abs(q1 - q2) + Math.abs(r1 - r2),
+  chebyshevDistance: (q1, r1, q2, r2) => Math.max(Math.abs(q1 - q2), Math.abs(r1 - r2)),
+  euclideanDistance: (q1, r1, q2, r2) => Math.sqrt((q1 - q2) ** 2 + (r1 - r2) ** 2),
+  getDistance: (gridType, heuristic, q1, r1, q2, r2) => {
+    switch (heuristic) {
+      case 'hex': return GridUtils.hexDistance(q1, r1, q2, r2);
+      case 'manhattan': return GridUtils.manhattanDistance(q1, r1, q2, r2);
+      case 'chebyshev': return GridUtils.chebyshevDistance(q1, r1, q2, r2);
+      case 'euclidean': return GridUtils.euclideanDistance(q1, r1, q2, r2);
+      default:
+        if (gridType === 'hex') return GridUtils.hexDistance(q1, r1, q2, r2);
+        if (gridType === 'square4') return GridUtils.manhattanDistance(q1, r1, q2, r2);
+        return GridUtils.chebyshevDistance(q1, r1, q2, r2);
+    }
+  },
+  getMovementCost: (gridType, dq, dr, baseWeight) => {
+    if (gridType === 'hex') return baseWeight;
+    if (gridType === 'square8' && dq !== 0 && dr !== 0) return baseWeight * 1.414;
+    return baseWeight;
+  },
+};
+
+class MinHeap {
+  constructor() { this.heap = []; }
+  push(item, priority) { this.heap.push({ item, priority }); this.bubbleUp(this.heap.length - 1); }
+  pop() {
+    if (this.heap.length === 0) return null;
+    const min = this.heap[0];
+    const end = this.heap.pop();
+    if (this.heap.length > 0) { this.heap[0] = end; this.bubbleDown(0); }
+    return min.item;
+  }
+  isEmpty() { return this.heap.length === 0; }
+  bubbleUp(index) {
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.heap[parentIndex].priority <= this.heap[index].priority) break;
+      [this.heap[parentIndex], this.heap[index]] = [this.heap[index], this.heap[parentIndex]];
+      index = parentIndex;
+    }
+  }
+  bubbleDown(index) {
+    const length = this.heap.length;
+    while (true) {
+      const leftChild = 2 * index + 1, rightChild = 2 * index + 2;
+      let smallest = index;
+      if (leftChild < length && this.heap[leftChild].priority < this.heap[smallest].priority) smallest = leftChild;
+      if (rightChild < length && this.heap[rightChild].priority < this.heap[smallest].priority) smallest = rightChild;
+      if (smallest === index) break;
+      [this.heap[smallest], this.heap[index]] = [this.heap[index], this.heap[smallest]];
+      index = smallest;
+    }
+  }
+}
+
+const Algorithms = {
+  aStar: (grid, start, end, heuristicWeight = 1, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
+    const openSet = new MinHeap();
+    const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
+    const gScore = new Map(), fScore = new Map(), previous = new Map(), visited = [], formationState = new Map();
+    gScore.set(startKey, 0);
+    fScore.set(startKey, heuristicWeight * GridUtils.getDistance(gridType, heuristic, start.q, start.r, end.q, end.r));
+    formationState.set(startKey, true);
+    openSet.push(startKey, fScore.get(startKey));
+    const inOpenSet = new Set([startKey]);
+    while (!openSet.isEmpty()) {
+      const currentKey = openSet.pop();
+      inOpenSet.delete(currentKey);
+      if (currentKey === endKey) return { previous, visited, endKey, gScore, fScore, formationState };
+      const current = GridUtils.parseKey(currentKey);
+      visited.push(currentKey);
+      const currentNode = grid.get(currentKey);
+      if (!currentNode) continue;
+      const currentIsCompact = formationState.get(currentKey) ?? true;
+      for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborNode = grid.get(neighborKey);
+        if (!neighborNode || neighborNode.isWall) continue;
+        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        if (!canFitCompact && !canSnake) continue;
+        const dq = neighbor.q - current.q, dr = neighbor.r - current.r;
+        let moveCost = GridUtils.getMovementCost(gridType, dq, dr, 1);
+        let neighborIsCompact = canFitCompact;
+        if (unitSize > 1) {
+          if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
+          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        }
+        const tentativeG = gScore.get(currentKey) + moveCost;
+        if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
+          previous.set(neighborKey, currentKey);
+          gScore.set(neighborKey, tentativeG);
+          formationState.set(neighborKey, neighborIsCompact);
+          const f = tentativeG + heuristicWeight * GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, end.q, end.r);
+          fScore.set(neighborKey, f);
+          if (!inOpenSet.has(neighborKey)) { openSet.push(neighborKey, f); inOpenSet.add(neighborKey); }
+        }
+      }
+    }
+    return { previous, visited, endKey: null, gScore, fScore, formationState };
+  },
+  dijkstra: (grid, start, end, gridType = 'hex', unitSize = 1, canSnake = false, snakePenalty = 1.5) => Algorithms.aStar(grid, start, end, 0, gridType, 'default', unitSize, canSnake, snakePenalty),
+  greedyBestFirst: (grid, start, end, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
+    const openSet = new MinHeap();
+    const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
+    const previous = new Map(), visited = [], gScore = new Map(), formationState = new Map();
+    openSet.push(startKey, GridUtils.getDistance(gridType, heuristic, start.q, start.r, end.q, end.r));
+    gScore.set(startKey, 0);
+    formationState.set(startKey, true);
+    const inOpenSet = new Set([startKey]);
+    while (!openSet.isEmpty()) {
+      const currentKey = openSet.pop();
+      inOpenSet.delete(currentKey);
+      if (currentKey === endKey) return { previous, visited, endKey, gScore, formationState };
+      const current = GridUtils.parseKey(currentKey);
+      visited.push(currentKey);
+      const currentIsCompact = formationState.get(currentKey) ?? true;
+      for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborNode = grid.get(neighborKey);
+        if (!neighborNode || neighborNode.isWall) continue;
+        if (previous.has(neighborKey) || neighborKey === startKey) continue;
+        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        if (!canFitCompact && !canSnake) continue;
+        previous.set(neighborKey, currentKey);
+        formationState.set(neighborKey, canFitCompact);
+        let moveCost = 1;
+        if (unitSize > 1) { if (canFitCompact) moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); else if (canSnake) moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        gScore.set(neighborKey, (gScore.get(currentKey) || 0) + moveCost);
+        openSet.push(neighborKey, GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, end.q, end.r));
+        inOpenSet.add(neighborKey);
+      }
+    }
+    return { previous, visited, endKey: null, gScore, formationState };
+  },
+  bfs: (grid, start, end, gridType = 'hex', unitSize = 1, canSnake = false) => {
+    const queue = [];
+    const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
+    const previous = new Map(), visited = [], gScore = new Map(), formationState = new Map();
+    queue.push(startKey);
+    gScore.set(startKey, 0);
+    formationState.set(startKey, true);
+    const inQueue = new Set([startKey]);
+    while (queue.length > 0) {
+      const currentKey = queue.shift();
+      if (currentKey === endKey) return { previous, visited, endKey, gScore, formationState };
+      visited.push(currentKey);
+      for (const neighbor of GridUtils.getNeighbors(gridType, GridUtils.parseKey(currentKey).q, GridUtils.parseKey(currentKey).r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborNode = grid.get(neighborKey);
+        if (!neighborNode || neighborNode.isWall) continue;
+        if (inQueue.has(neighborKey)) continue;
+        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        if (!canFitCompact && !canSnake) continue;
+        previous.set(neighborKey, currentKey);
+        formationState.set(neighborKey, canFitCompact);
+        gScore.set(neighborKey, (gScore.get(currentKey) || 0) + 1);
+        queue.push(neighborKey);
+        inQueue.add(neighborKey);
+      }
+    }
+    return { previous, visited, endKey: null, gScore, formationState };
+  },
+  dfs: (grid, start, end, gridType = 'hex', unitSize = 1, canSnake = false) => {
+    const stack = [];
+    const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
+    const previous = new Map(), visited = [], gScore = new Map(), formationState = new Map();
+    stack.push(startKey);
+    gScore.set(startKey, 0);
+    formationState.set(startKey, true);
+    const inStack = new Set([startKey]);
+    while (stack.length > 0) {
+      const currentKey = stack.pop();
+      if (currentKey === endKey) return { previous, visited, endKey, gScore, formationState };
+      visited.push(currentKey);
+      for (const neighbor of GridUtils.getNeighbors(gridType, GridUtils.parseKey(currentKey).q, GridUtils.parseKey(currentKey).r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborNode = grid.get(neighborKey);
+        if (!neighborNode || neighborNode.isWall) continue;
+        if (inStack.has(neighborKey)) continue;
+        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        if (!canFitCompact && !canSnake) continue;
+        previous.set(neighborKey, currentKey);
+        formationState.set(neighborKey, canFitCompact);
+        gScore.set(neighborKey, (gScore.get(currentKey) || 0) + 1);
+        stack.push(neighborKey);
+        inStack.add(neighborKey);
+      }
+    }
+    return { previous, visited, endKey: null, gScore, formationState };
+  },
+  swarm: (grid, start, end, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
+    const openSet = new MinHeap();
+    const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
+    const gScore = new Map(), previous = new Map(), visited = [], formationState = new Map();
+    gScore.set(startKey, 0);
+    formationState.set(startKey, true);
+    openSet.push(startKey, GridUtils.getDistance(gridType, heuristic, start.q, start.r, end.q, end.r));
+    const inOpenSet = new Set([startKey]);
+    let iteration = 0;
+    while (!openSet.isEmpty()) {
+      const currentKey = openSet.pop();
+      inOpenSet.delete(currentKey);
+      iteration++;
+      if (currentKey === endKey) return { previous, visited, endKey, gScore, formationState };
+      const current = GridUtils.parseKey(currentKey);
+      visited.push(currentKey);
+      const currentIsCompact = formationState.get(currentKey) ?? true;
+      for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborNode = grid.get(neighborKey);
+        if (!neighborNode || neighborNode.isWall) continue;
+        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        if (!canFitCompact && !canSnake) continue;
+        let moveCost = 1, neighborIsCompact = canFitCompact;
+        if (unitSize > 1) {
+          if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
+          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        }
+        const tentativeG = gScore.get(currentKey) + moveCost;
+        if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
+          previous.set(neighborKey, currentKey);
+          gScore.set(neighborKey, tentativeG);
+          formationState.set(neighborKey, neighborIsCompact);
+          const h = GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, end.q, end.r);
+          if (!inOpenSet.has(neighborKey)) { openSet.push(neighborKey, tentativeG + (1 + (h / (iteration + 1)) * 2) * h); inOpenSet.add(neighborKey); }
+        }
+      }
+    }
+    return { previous, visited, endKey: null, gScore, formationState };
+  },
+  convergentSwarm: (grid, start, end, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
+    const openSet = new MinHeap();
+    const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
+    const gScore = new Map(), previous = new Map(), visited = [], formationState = new Map();
+    gScore.set(startKey, 0);
+    formationState.set(startKey, true);
+    const maxH = GridUtils.getDistance(gridType, heuristic, start.q, start.r, end.q, end.r);
+    openSet.push(startKey, maxH);
+    const inOpenSet = new Set([startKey]);
+    while (!openSet.isEmpty()) {
+      const currentKey = openSet.pop();
+      inOpenSet.delete(currentKey);
+      if (currentKey === endKey) return { previous, visited, endKey, gScore, formationState };
+      const current = GridUtils.parseKey(currentKey);
+      visited.push(currentKey);
+      const currentIsCompact = formationState.get(currentKey) ?? true;
+      for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborNode = grid.get(neighborKey);
+        if (!neighborNode || neighborNode.isWall) continue;
+        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        if (!canFitCompact && !canSnake) continue;
+        let moveCost = 1, neighborIsCompact = canFitCompact;
+        if (unitSize > 1) {
+          if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
+          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        }
+        const tentativeG = gScore.get(currentKey) + moveCost;
+        if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
+          previous.set(neighborKey, currentKey);
+          gScore.set(neighborKey, tentativeG);
+          formationState.set(neighborKey, neighborIsCompact);
+          const h = GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, end.q, end.r);
+          const progress = 1 - (h / maxH);
+          if (!inOpenSet.has(neighborKey)) { openSet.push(neighborKey, tentativeG + (1 + (1 - progress) * 3) * h); inOpenSet.add(neighborKey); }
+        }
+      }
+    }
+    return { previous, visited, endKey: null, gScore, formationState };
+  },
+  bidirectionalSwarm: (grid, start, end, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
+    const openSetStart = new MinHeap(), openSetEnd = new MinHeap();
+    const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
+    const gScoreStart = new Map(), gScoreEnd = new Map();
+    const previousStart = new Map(), previousEnd = new Map();
+    const visitedStart = new Set(), visitedEnd = new Set();
+    const visited = [], formationStateStart = new Map(), formationStateEnd = new Map();
+    gScoreStart.set(startKey, 0); gScoreEnd.set(endKey, 0);
+    formationStateStart.set(startKey, true); formationStateEnd.set(endKey, true);
+    openSetStart.push(startKey, GridUtils.getDistance(gridType, heuristic, start.q, start.r, end.q, end.r));
+    openSetEnd.push(endKey, GridUtils.getDistance(gridType, heuristic, end.q, end.r, start.q, start.r));
+    const inOpenStart = new Set([startKey]), inOpenEnd = new Set([endKey]);
+    let meetingPoint = null;
+    while (!openSetStart.isEmpty() && !openSetEnd.isEmpty()) {
+      if (!openSetStart.isEmpty()) {
+        const currentKey = openSetStart.pop(); inOpenStart.delete(currentKey); visitedStart.add(currentKey); visited.push(currentKey);
+        if (visitedEnd.has(currentKey)) { meetingPoint = currentKey; break; }
+        const current = GridUtils.parseKey(currentKey);
+        const currentIsCompact = formationStateStart.get(currentKey) ?? true;
+        for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+          const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+          const neighborNode = grid.get(neighborKey);
+          if (!neighborNode || neighborNode.isWall || visitedStart.has(neighborKey)) continue;
+          const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+          if (!canFitCompact && !canSnake) continue;
+          let moveCost = 1, neighborIsCompact = canFitCompact;
+          if (unitSize > 1) {
+            if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
+            else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+          }
+          const tentativeG = gScoreStart.get(currentKey) + moveCost;
+          if (!gScoreStart.has(neighborKey) || tentativeG < gScoreStart.get(neighborKey)) {
+            previousStart.set(neighborKey, currentKey); gScoreStart.set(neighborKey, tentativeG); formationStateStart.set(neighborKey, neighborIsCompact);
+            if (!inOpenStart.has(neighborKey)) { openSetStart.push(neighborKey, tentativeG + GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, end.q, end.r)); inOpenStart.add(neighborKey); }
+          }
+        }
+      }
+      if (!openSetEnd.isEmpty()) {
+        const currentKey = openSetEnd.pop(); inOpenEnd.delete(currentKey); visitedEnd.add(currentKey); visited.push(currentKey);
+        if (visitedStart.has(currentKey)) { meetingPoint = currentKey; break; }
+        const current = GridUtils.parseKey(currentKey);
+        const currentIsCompact = formationStateEnd.get(currentKey) ?? true;
+        for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+          const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+          const neighborNode = grid.get(neighborKey);
+          if (!neighborNode || neighborNode.isWall || visitedEnd.has(neighborKey)) continue;
+          const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+          if (!canFitCompact && !canSnake) continue;
+          let moveCost = 1, neighborIsCompact = canFitCompact;
+          if (unitSize > 1) {
+            if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
+            else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+          }
+          const tentativeG = gScoreEnd.get(currentKey) + moveCost;
+          if (!gScoreEnd.has(neighborKey) || tentativeG < gScoreEnd.get(neighborKey)) {
+            previousEnd.set(neighborKey, currentKey); gScoreEnd.set(neighborKey, tentativeG); formationStateEnd.set(neighborKey, neighborIsCompact);
+            if (!inOpenEnd.has(neighborKey)) { openSetEnd.push(neighborKey, tentativeG + GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, start.q, start.r)); inOpenEnd.add(neighborKey); }
+          }
+        }
+      }
+    }
+    const mergedGScore = new Map(gScoreStart); for (const [k, v] of gScoreEnd) if (!mergedGScore.has(k)) mergedGScore.set(k, v);
+    const mergedFormationState = new Map(formationStateStart); for (const [k, v] of formationStateEnd) if (!mergedFormationState.has(k)) mergedFormationState.set(k, v);
+    return { previousStart, previousEnd, visitedStart: [...visitedStart], visitedEnd: [...visitedEnd], visited, meetingPoint, gScoreStart, gScoreEnd, gScore: mergedGScore, formationStateStart, formationStateEnd, formationState: mergedFormationState };
+  },
+  flowField: (grid, start, end, gridType = 'hex', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
+    const endKey = GridUtils.cellKey(end.q, end.r), startKey = GridUtils.cellKey(start.q, start.r);
+    const costField = new Map(), flowVectors = new Map(), visited = [], formationState = new Map();
+    const openSet = new MinHeap();
+    costField.set(endKey, 0); formationState.set(endKey, true); openSet.push(endKey, 0);
+    while (!openSet.isEmpty()) {
+      const currentKey = openSet.pop();
+      const current = GridUtils.parseKey(currentKey);
+      visited.push(currentKey);
+      const currentCost = costField.get(currentKey);
+      const currentIsCompact = formationState.get(currentKey) ?? true;
+      for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborNode = grid.get(neighborKey);
+        if (!neighborNode || neighborNode.isWall) continue;
+        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        if (!canFitCompact && !canSnake) continue;
+        const dq = neighbor.q - current.q, dr = neighbor.r - current.r;
+        let moveCost = GridUtils.getMovementCost(gridType, dq, dr, 1);
+        let neighborIsCompact = canFitCompact;
+        if (unitSize > 1) {
+          if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
+          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        }
+        const newCost = currentCost + moveCost;
+        if (!costField.has(neighborKey) || newCost < costField.get(neighborKey)) { costField.set(neighborKey, newCost); formationState.set(neighborKey, neighborIsCompact); openSet.push(neighborKey, newCost); }
+      }
+    }
+    for (const [key] of costField) {
+      const current = GridUtils.parseKey(key);
+      const currentCost = costField.get(key);
+      let bestNeighbor = null, bestCost = currentCost;
+      for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
+        const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
+        const neighborCost = costField.get(neighborKey);
+        if (neighborCost !== undefined && neighborCost < bestCost) { bestCost = neighborCost; bestNeighbor = neighbor; }
+      }
+      if (bestNeighbor) flowVectors.set(key, { direction: { q: bestNeighbor.q - current.q, r: bestNeighbor.r - current.r } });
+    }
+    const path = [];
+    let current = startKey;
+    const pathVisited = new Set();
+    while (current && current !== endKey && !pathVisited.has(current)) {
+      pathVisited.add(current);
+      const flow = flowVectors.get(current);
+      if (!flow) break;
+      const pos = GridUtils.parseKey(current);
+      const nextKey = GridUtils.cellKey(pos.q + flow.direction.q, pos.r + flow.direction.r);
+      path.push({ key: nextKey, isCompact: formationState.get(nextKey) ?? true });
+      current = nextKey;
+    }
+    return { visited, path, costField, flowVectors, gScore: costField, formationState };
+  },
+};
+
+function PathfindingVisualizer() {
+  const [gridType, setGridType] = useState('hex');
+  const [heuristic, setHeuristic] = useState('default');
+  const [grid, setGrid] = useState(new Map());
+  const [startNode, setStartNode] = useState({ q: -10, r: 0 });
+  const [endNode, setEndNode] = useState({ q: 10, r: 0 });
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState('aStar');
+  const [isRunning, setIsRunning] = useState(false);
+  const [isDragging, setIsDragging] = useState(null);
+  const [hoveredHex, setHoveredHex] = useState(null);
+  const [speed, setSpeed] = useState('fast');
+  const [stats, setStats] = useState({ visited: 0, pathLength: 0, time: 0 });
+  const [unitSize, setUnitSize] = useState(1);
+  const [canSnake, setCanSnake] = useState(false);
+  const [snakePenalty, setSnakePenalty] = useState(1.5);
+  const [heuristicWeight, setHeuristicWeight] = useState(1);
+  const [showCellNumbers, setShowCellNumbers] = useState(false);
+  const [showCostOverlay, setShowCostOverlay] = useState(false);
+  const [costField, setCostField] = useState(new Map());
+  const [flowVectors, setFlowVectors] = useState(new Map());
+  const [showFlowVectors, setShowFlowVectors] = useState(true);
+  const [hasVisualized, setHasVisualized] = useState(false);
+  const [wallEditMode, setWallEditMode] = useState(null);
+
+  const svgRef = useRef(null);
+  const animationRef = useRef([]);
+  const prevSettingsRef = useRef({ heuristicWeight, snakePenalty, canSnake, unitSize, selectedAlgorithm, gridType, heuristic });
+
+  const CELL_SIZE = gridType === 'hex' ? 18 : 14;
+  const SVG_WIDTH = 1200, SVG_HEIGHT = 800;
+  const speedSettings = { fast: { visit: 5, path: 20 }, average: { visit: 20, path: 40 }, slow: { visit: 50, path: 80 } };
+  const gridConfig = GridUtils.getConfig(gridType);
+
+  const initializeGrid = useCallback(() => {
+    const newGrid = new Map();
+    if (gridType === 'hex') {
+      const size = 18, sqrt3 = Math.sqrt(3), maxX = 580;
+      for (let r = -14; r <= 14; r++) {
+        const xOffsetFromR = size * (sqrt3 / 2) * r;
+        const qSpacing = size * sqrt3;
+        const minQ = Math.ceil((-maxX - xOffsetFromR) / qSpacing), maxQ = Math.floor((maxX - xOffsetFromR) / qSpacing);
+        for (let q = minQ; q <= maxQ; q++) newGrid.set(GridUtils.cellKey(q, r), { q, r, isWall: false, isVisited: false, isPath: false, isStart: false, isEnd: false, animationState: 'none' });
+      }
+    } else {
+      for (let q = -20; q <= 20; q++) for (let r = -13; r <= 13; r++) newGrid.set(GridUtils.cellKey(q, r), { q, r, isWall: false, isVisited: false, isPath: false, isStart: false, isEnd: false, animationState: 'none' });
+    }
+    const defaultStart = gridType === 'hex' ? { q: -14, r: 0 } : { q: -16, r: 0 };
+    const defaultEnd = gridType === 'hex' ? { q: 14, r: 0 } : { q: 16, r: 0 };
+    if (newGrid.has(GridUtils.cellKey(defaultStart.q, defaultStart.r))) newGrid.set(GridUtils.cellKey(defaultStart.q, defaultStart.r), { ...newGrid.get(GridUtils.cellKey(defaultStart.q, defaultStart.r)), isStart: true });
+    if (newGrid.has(GridUtils.cellKey(defaultEnd.q, defaultEnd.r))) newGrid.set(GridUtils.cellKey(defaultEnd.q, defaultEnd.r), { ...newGrid.get(GridUtils.cellKey(defaultEnd.q, defaultEnd.r)), isEnd: true });
+    return newGrid;
+  }, [gridType]);
+
+  useEffect(() => {
+    const newGrid = initializeGrid();
+    setGrid(newGrid);
+    const defaultStart = gridType === 'hex' ? { q: -14, r: 0 } : { q: -16, r: 0 };
+    const defaultEnd = gridType === 'hex' ? { q: 14, r: 0 } : { q: 16, r: 0 };
+    setStartNode(defaultStart); setEndNode(defaultEnd);
+    setHasVisualized(false); setFlowVectors(new Map()); setCostField(new Map()); setStats({ visited: 0, pathLength: 0, time: 0 });
+    if (!gridConfig.unitSizes.includes(unitSize)) setUnitSize(gridConfig.unitSizes[0]);
+    setHeuristic(gridConfig.defaultHeuristic);
+  }, [gridType, initializeGrid, gridConfig]);
+
+  const offsetX = SVG_WIDTH / 2, offsetY = SVG_HEIGHT / 2;
+  const clearAnimations = useCallback(() => { animationRef.current.forEach(id => clearTimeout(id)); animationRef.current = []; }, []);
+  const clearPath = useCallback(() => {
+    clearAnimations();
+    setGrid(prev => { const newGrid = new Map(prev); for (const [key, node] of newGrid) newGrid.set(key, { ...node, isVisited: false, isPath: false, animationState: 'none' }); return newGrid; });
+    setStats({ visited: 0, pathLength: 0, time: 0 }); setFlowVectors(new Map()); setCostField(new Map());
+  }, [clearAnimations]);
+  const clearBoard = useCallback(() => {
+    clearAnimations();
+    setGrid(initializeGrid());
+    const defaultStart = gridType === 'hex' ? { q: -14, r: 0 } : { q: -16, r: 0 };
+    const defaultEnd = gridType === 'hex' ? { q: 14, r: 0 } : { q: 16, r: 0 };
+    setStartNode(defaultStart); setEndNode(defaultEnd);
+    setHasVisualized(false); setFlowVectors(new Map()); setCostField(new Map()); setStats({ visited: 0, pathLength: 0, time: 0 });
+  }, [clearAnimations, initializeGrid, gridType]);
+
+  const reconstructPath = (previous, endKey, startKey, formationState = null) => {
+    const path = [];
+    let current = endKey;
+    while (current && current !== startKey) { path.unshift({ key: current, isCompact: formationState ? (formationState.get(current) ?? true) : true }); current = previous.get(current); }
+    if (current === startKey) path.unshift({ key: startKey, isCompact: formationState ? (formationState.get(startKey) ?? true) : true });
+    return path;
+  };
+
+  const animateAlgorithm = useCallback((visited, path, currentUnitSize = 1) => {
+    const { visit: visitDelay, path: pathDelay } = speedSettings[speed];
+    visited.forEach((key, index) => {
+      const timeout = setTimeout(() => setGrid(prev => { const newGrid = new Map(prev); const node = newGrid.get(key); if (node && !node.isStart && !node.isEnd) newGrid.set(key, { ...node, animationState: 'visited' }); return newGrid; }), index * visitDelay);
+      animationRef.current.push(timeout);
+    });
+    const pathStartTime = visited.length * visitDelay;
+    path.forEach((pathNode, index) => {
+      const timeout = setTimeout(() => {
+        setGrid(prev => {
+          const newGrid = new Map(prev);
+          const { key, isCompact } = pathNode;
+          const { q, r } = GridUtils.parseKey(key);
+          const formationCells = GridUtils.getFormationCells(gridType, q, r, currentUnitSize);
+          const centerNode = newGrid.get(key);
+          if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(key, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
+          if (currentUnitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === key) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+          return newGrid;
+        });
+        if (index === path.length - 1) setIsRunning(false);
+      }, pathStartTime + index * pathDelay);
+      animationRef.current.push(timeout);
+    });
+    if (path.length === 0) { const timeout = setTimeout(() => setIsRunning(false), visited.length * visitDelay + 100); animationRef.current.push(timeout); }
+  }, [speed, gridType]);
+
+  const runAlgorithm = useCallback(() => {
+    if (isRunning) return;
+    clearPath(); setIsRunning(true);
+    const startTime = performance.now();
+    const algorithmGrid = new Map();
+    for (const [key, node] of grid) algorithmGrid.set(key, { ...node, isVisited: false });
+    const startKey = GridUtils.cellKey(startNode.q, startNode.r);
+    let result;
+    const runSelectedAlgorithm = (gridToUse, from, to) => {
+      switch (selectedAlgorithm) {
+        case 'aStar': return Algorithms.aStar(gridToUse, from, to, heuristicWeight >= 10 ? 1000 : heuristicWeight, gridType, heuristic, unitSize, canSnake, snakePenalty);
+        case 'dijkstra': return Algorithms.dijkstra(gridToUse, from, to, gridType, unitSize, canSnake, snakePenalty);
+        case 'greedyBestFirst': return Algorithms.greedyBestFirst(gridToUse, from, to, gridType, heuristic, unitSize, canSnake, snakePenalty);
+        case 'bfs': return Algorithms.bfs(gridToUse, from, to, gridType, unitSize, canSnake);
+        case 'dfs': return Algorithms.dfs(gridToUse, from, to, gridType, unitSize, canSnake);
+        case 'swarm': return Algorithms.swarm(gridToUse, from, to, gridType, heuristic, unitSize, canSnake, snakePenalty);
+        case 'convergentSwarm': return Algorithms.convergentSwarm(gridToUse, from, to, gridType, heuristic, unitSize, canSnake, snakePenalty);
+        case 'flowField': return Algorithms.flowField(gridToUse, from, to, gridType, unitSize, canSnake, snakePenalty);
+        default: return Algorithms.aStar(gridToUse, from, to, 1, gridType, heuristic, unitSize, canSnake, snakePenalty);
+      }
+    };
+    if (selectedAlgorithm === 'bidirectionalSwarm') {
+      const algoResult = Algorithms.bidirectionalSwarm(algorithmGrid, startNode, endNode, gridType, heuristic, unitSize, canSnake, snakePenalty);
+      let path = [];
+      if (algoResult.meetingPoint) {
+        const pathFromStart = reconstructPath(algoResult.previousStart, algoResult.meetingPoint, startKey, algoResult.formationStateStart);
+        const pathToEnd = [];
+        let current = algoResult.meetingPoint;
+        const endKey = GridUtils.cellKey(endNode.q, endNode.r);
+        while (current && current !== endKey) { const next = algoResult.previousEnd.get(current); if (next) pathToEnd.push({ key: next, isCompact: algoResult.formationStateEnd?.get(next) ?? true }); current = next; }
+        path = [...pathFromStart, ...pathToEnd];
+      }
+      result = { visited: algoResult.visited, path, gScore: algoResult.gScore };
+    } else {
+      const algoResult = runSelectedAlgorithm(algorithmGrid, startNode, endNode);
+      let path;
+      if (selectedAlgorithm === 'flowField' && algoResult.path) { path = algoResult.path; setFlowVectors(algoResult.flowVectors || new Map()); }
+      else path = reconstructPath(algoResult.previous, algoResult.endKey, startKey, algoResult.formationState);
+      result = { visited: algoResult.visited, path, gScore: selectedAlgorithm === 'flowField' ? (algoResult.costField || new Map()) : (algoResult.gScore || new Map()) };
+    }
+    if (selectedAlgorithm !== 'flowField') setFlowVectors(new Map());
+    setCostField(result.gScore || new Map());
+    setStats({ visited: result.visited.length, pathLength: result.path.length, time: Math.round(performance.now() - startTime) });
+    animateAlgorithm(result.visited, result.path, unitSize);
+    setHasVisualized(true);
+  }, [grid, startNode, endNode, selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, isRunning, clearPath, animateAlgorithm, gridType, heuristic]);
+
+  const runInstantRecalc = useCallback((gridState, newStart, newEnd) => {
+    const algorithmGrid = new Map();
+    for (const [k, n] of gridState) algorithmGrid.set(k, { ...n, isVisited: false });
+    const sKey = GridUtils.cellKey(newStart.q, newStart.r);
+    let path = [], gScore = new Map();
+    if (selectedAlgorithm === 'aStar') { const algoResult = Algorithms.aStar(algorithmGrid, newStart, newEnd, heuristicWeight >= 10 ? 1000 : heuristicWeight, gridType, heuristic, unitSize, canSnake, snakePenalty); path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); }); }
+    else if (selectedAlgorithm === 'flowField') { const algoResult = Algorithms.flowField(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake, snakePenalty); path = algoResult.path || []; gScore = algoResult.costField || new Map(); setTimeout(() => setFlowVectors(algoResult.flowVectors || new Map()), 0); }
+    else if (selectedAlgorithm === 'bidirectionalSwarm') {
+      const algoResult = Algorithms.bidirectionalSwarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty);
+      gScore = algoResult.gScore || new Map();
+      if (algoResult.meetingPoint) { const pathFromStart = reconstructPath(algoResult.previousStart, algoResult.meetingPoint, sKey, algoResult.formationStateStart); const eKey = GridUtils.cellKey(newEnd.q, newEnd.r); const pathToEnd = []; let current = algoResult.meetingPoint; while (current && current !== eKey) { const next = algoResult.previousEnd.get(current); if (next) pathToEnd.push({ key: next, isCompact: algoResult.formationStateEnd?.get(next) ?? true }); current = next; } path = [...pathFromStart, ...pathToEnd]; }
+      algoResult.visitedStart?.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); });
+      algoResult.visitedEnd?.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); });
+    }
+    else if (selectedAlgorithm === 'dijkstra') { const algoResult = Algorithms.dijkstra(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake, snakePenalty); path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); }); }
+    else {
+      const algoResult = selectedAlgorithm === 'greedyBestFirst' ? Algorithms.greedyBestFirst(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty) : selectedAlgorithm === 'bfs' ? Algorithms.bfs(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake) : selectedAlgorithm === 'dfs' ? Algorithms.dfs(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake) : selectedAlgorithm === 'swarm' ? Algorithms.swarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty) : Algorithms.convergentSwarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty);
+      path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); });
+    }
+    return { path, gScore, algorithmGrid };
+  }, [selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, gridType, heuristic]);
+
+  const handleCellInteraction = useCallback((q, r, isClick = false) => {
+    if (isRunning) return;
+    const key = GridUtils.cellKey(q, r);
+    const node = grid.get(key);
+    if (!node) return;
+    if (isClick) {
+      if (node.isStart) { setIsDragging('start'); return; }
+      if (node.isEnd) { setIsDragging('end'); return; }
+      const shouldBeWall = !node.isWall;
+      setIsDragging('wall'); setWallEditMode(shouldBeWall ? 'add' : 'remove');
+      setGrid(prev => { const newGrid = new Map(prev); newGrid.set(key, { ...node, isWall: shouldBeWall }); return newGrid; });
+      return;
+    }
+    if (isDragging === 'start' && !node.isEnd && !node.isWall) {
+      const newStart = { q, r };
+      setStartNode(newStart);
+      const newGrid = new Map(grid);
+      for (const [k, n] of newGrid) if (n.isStart && k !== key) newGrid.set(k, { ...n, isStart: false });
+      newGrid.set(key, { ...node, isStart: true });
+      let newGScore = new Map();
+      if (hasVisualized) {
+        for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
+        const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, newStart, endNode);
+        newGScore = gScore;
+        for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
+        for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
+        for (const pathNode of path) {
+          const { key: pKey, isCompact } = pathNode;
+          const { q: pq, r: pr } = GridUtils.parseKey(pKey);
+          const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize);
+          const centerNode = newGrid.get(pKey);
+          if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
+          if (unitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+        }
+        setStats(s => ({ ...s, pathLength: path.length }));
+      }
+      setGrid(newGrid);
+      if (hasVisualized) setCostField(newGScore);
+      return;
+    }
+    if (isDragging === 'end' && !node.isStart && !node.isWall) {
+      const newEnd = { q, r };
+      setEndNode(newEnd);
+      const newGrid = new Map(grid);
+      for (const [k, n] of newGrid) if (n.isEnd && k !== key) newGrid.set(k, { ...n, isEnd: false });
+      newGrid.set(key, { ...node, isEnd: true });
+      let newGScore = new Map();
+      if (hasVisualized) {
+        for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
+        const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, newEnd);
+        newGScore = gScore;
+        for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
+        for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
+        for (const pathNode of path) {
+          const { key: pKey, isCompact } = pathNode;
+          const { q: pq, r: pr } = GridUtils.parseKey(pKey);
+          const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize);
+          const centerNode = newGrid.get(pKey);
+          if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
+          if (unitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+        }
+        setStats(s => ({ ...s, pathLength: path.length }));
+      }
+      setGrid(newGrid);
+      if (hasVisualized) setCostField(newGScore);
+      return;
+    }
+    if (!node.isStart && !node.isEnd && isDragging === 'wall') {
+      const shouldBeWall = wallEditMode === 'add';
+      if (node.isWall !== shouldBeWall) setGrid(prev => { const newGrid = new Map(prev); newGrid.set(key, { ...node, isWall: shouldBeWall }); return newGrid; });
+    }
+  }, [grid, isRunning, isDragging, startNode, endNode, hasVisualized, unitSize, runInstantRecalc, wallEditMode, gridType]);
+
+  useEffect(() => {
+    const prev = prevSettingsRef.current;
+    const settingsChanged = prev.heuristicWeight !== heuristicWeight || prev.snakePenalty !== snakePenalty || prev.canSnake !== canSnake || prev.unitSize !== unitSize || prev.selectedAlgorithm !== selectedAlgorithm || prev.gridType !== gridType || prev.heuristic !== heuristic;
+    prevSettingsRef.current = { heuristicWeight, snakePenalty, canSnake, unitSize, selectedAlgorithm, gridType, heuristic };
+    if (!settingsChanged || !hasVisualized || isRunning) return;
+    let computedGScore = new Map(), computedPathLength = 0;
+    setGrid(currentGrid => {
+      const newGrid = new Map(currentGrid);
+      for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
+      const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, endNode);
+      computedGScore = gScore; computedPathLength = path.length;
+      for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
+      for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
+      for (const pathNode of path) {
+        const { key: pKey, isCompact } = pathNode;
+        const { q: pq, r: pr } = GridUtils.parseKey(pKey);
+        const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize);
+        const centerNode = newGrid.get(pKey);
+        if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
+        if (unitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+      }
+      return newGrid;
+    });
+    setCostField(computedGScore); setStats(s => ({ ...s, pathLength: computedPathLength }));
+  }, [heuristicWeight, snakePenalty, canSnake, unitSize, selectedAlgorithm, hasVisualized, isRunning, startNode, endNode, runInstantRecalc, gridType, heuristic]);
+
+  const handleMouseDown = (q, r) => handleCellInteraction(q, r, true);
+  const handleMouseEnter = (q, r) => { setHoveredHex({ q, r }); if (isDragging) handleCellInteraction(q, r, false); };
+  const handleMouseUp = () => { setIsDragging(null); setWallEditMode(null); };
+  const generateMaze = useCallback(() => { clearPath(); setHasVisualized(false); setGrid(prev => { const newGrid = new Map(prev); for (const [key, node] of newGrid) if (!node.isStart && !node.isEnd) newGrid.set(key, { ...node, isWall: Math.random() < 0.3 }); return newGrid; }); }, [clearPath]);
+  const isInStartFormation = useCallback((q, r) => { if (unitSize === 1) return q === startNode.q && r === startNode.r; return GridUtils.getFormationCells(gridType, startNode.q, startNode.r, unitSize).some(c => c.q === q && c.r === r); }, [startNode, unitSize, gridType]);
+  const isInEndFormation = useCallback((q, r) => { if (unitSize === 1) return q === endNode.q && r === endNode.r; return GridUtils.getFormationCells(gridType, endNode.q, endNode.r, unitSize).some(c => c.q === q && c.r === r); }, [endNode, unitSize, gridType]);
+  const getCellFill = (node) => { const inStart = isInStartFormation(node.q, node.r), inEnd = isInEndFormation(node.q, node.r); if (inStart) return '#0077BB'; if (inEnd) return '#EE7733'; if (node.isWall) return '#0d0d1a'; switch (node.animationState) { case 'visited': return '#88CCEE'; case 'path': case 'pathFormation': return '#FFDD44'; case 'pathSnaking': case 'pathSnakingFormation': return '#FFFFFF'; default: break; } return '#1a1a2e'; };
+  const getCellStroke = (node, isHovered) => { if (isHovered) return '#fff'; const inStart = isInStartFormation(node.q, node.r), inEnd = isInEndFormation(node.q, node.r); if (inStart) return '#0077BB'; if (inEnd) return '#EE7733'; if (node.isWall) return '#333'; return '#0f3460'; };
+  const getFlowArrow = (q, r, direction) => { const { x, y } = GridUtils.cellToPixel(gridType, q, r, CELL_SIZE); const cx = x + offsetX, cy = y + offsetY; const targetPixel = GridUtils.cellToPixel(gridType, q + direction.q, r + direction.r, CELL_SIZE); const angle = Math.atan2(targetPixel.y - y, targetPixel.x - x); const arrowLength = CELL_SIZE * 0.5, arrowHeadSize = CELL_SIZE * 0.2; const startX = cx - Math.cos(angle) * (arrowLength * 0.3), startY = cy - Math.sin(angle) * (arrowLength * 0.3); const tipX = cx + Math.cos(angle) * arrowLength * 0.7, tipY = cy + Math.sin(angle) * arrowLength * 0.7; const headAngle1 = angle + Math.PI * 0.75, headAngle2 = angle - Math.PI * 0.75; return { line: { x1: startX, y1: startY, x2: tipX, y2: tipY }, head: `${tipX},${tipY} ${tipX + Math.cos(headAngle1) * arrowHeadSize},${tipY + Math.sin(headAngle1) * arrowHeadSize} ${tipX + Math.cos(headAngle2) * arrowHeadSize},${tipY + Math.sin(headAngle2) * arrowHeadSize}` }; };
+
+  const renderCell = (node) => {
+    const { x, y } = GridUtils.cellToPixel(gridType, node.q, node.r, CELL_SIZE);
+    const cx = x + offsetX, cy = y + offsetY;
+    const isHovered = hoveredHex && hoveredHex.q === node.q && hoveredHex.r === node.r;
+    const inStart = isInStartFormation(node.q, node.r), inEnd = isInEndFormation(node.q, node.r);
+    const isPrimaryStart = node.q === startNode.q && node.r === startNode.r, isPrimaryEnd = node.q === endNode.q && node.r === endNode.r;
+    const cellKey = GridUtils.cellKey(node.q, node.r);
+    const flowVector = flowVectors.get(cellKey);
+    const arrow = showFlowVectors && flowVector ? getFlowArrow(node.q, node.r, flowVector.direction) : null;
+    const cellCost = costField.get(cellKey);
+    const isPathCell = ['path', 'pathFormation', 'pathSnaking', 'pathSnakingFormation'].includes(node.animationState);
+    const showCost = showCostOverlay && cellCost !== undefined && (node.animationState === 'visited' || isPathCell);
+    const costTextColor = isPathCell ? '#000' : '#fff';
+    const isOnPath = node.animationState === 'path' || node.animationState === 'pathFormation';
+    const arrowColor = isOnPath ? '#000' : '#1a237e', arrowStroke = isOnPath ? '#FFDD44' : '#fff';
+
+    if (gridType === 'hex') {
+      const corners = GridUtils.hexCorners(cx, cy, CELL_SIZE - 1);
+      return (
+        <g key={cellKey}>
+          <polygon points={corners.map(c => `${c.x},${c.y}`).join(' ')} fill={getCellFill(node)} stroke={getCellStroke(node, isHovered)} strokeWidth={isHovered ? 2 : (inStart || inEnd) && unitSize > 1 ? 2 : 1} onMouseDown={() => handleMouseDown(node.q, node.r)} onMouseEnter={() => handleMouseEnter(node.q, node.r)} style={{ cursor: 'pointer' }} />
+          {isPrimaryStart && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="14" fontWeight="bold" pointerEvents="none">▶</text>}
+          {isPrimaryEnd && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="14" fontWeight="bold" pointerEvents="none">◎</text>}
+          {showCellNumbers && <text x={cx} y={cy + (isPrimaryStart || isPrimaryEnd ? 8 : 0)} textAnchor="middle" dominantBaseline="central" fill="#666" fontSize="7" pointerEvents="none">{node.q},{node.r}</text>}
+          {showCost && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill={costTextColor} fontSize="8" fontWeight="bold" pointerEvents="none" style={{ textShadow: isPathCell ? '0 0 2px #fff' : '0 0 3px #000' }}>{cellCost.toFixed(1)}</text>}
+          {arrow && <><line x1={arrow.line.x1} y1={arrow.line.y1} x2={arrow.line.x2} y2={arrow.line.y2} stroke={arrowStroke} strokeWidth="2" pointerEvents="none" /><line x1={arrow.line.x1} y1={arrow.line.y1} x2={arrow.line.x2} y2={arrow.line.y2} stroke={arrowColor} strokeWidth="1" pointerEvents="none" /><polygon points={arrow.head} fill={arrowColor} stroke={arrowStroke} strokeWidth="0.5" pointerEvents="none" /></>}
+        </g>
+      );
+    } else {
+      const halfSize = CELL_SIZE - 1;
+      return (
+        <g key={cellKey}>
+          <rect x={cx - halfSize} y={cy - halfSize} width={halfSize * 2} height={halfSize * 2} fill={getCellFill(node)} stroke={getCellStroke(node, isHovered)} strokeWidth={isHovered ? 2 : (inStart || inEnd) && unitSize > 1 ? 2 : 1} onMouseDown={() => handleMouseDown(node.q, node.r)} onMouseEnter={() => handleMouseEnter(node.q, node.r)} style={{ cursor: 'pointer' }} />
+          {isPrimaryStart && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="12" fontWeight="bold" pointerEvents="none">▶</text>}
+          {isPrimaryEnd && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="12" fontWeight="bold" pointerEvents="none">◎</text>}
+          {showCellNumbers && <text x={cx} y={cy + (isPrimaryStart || isPrimaryEnd ? 6 : 0)} textAnchor="middle" dominantBaseline="central" fill="#666" fontSize="6" pointerEvents="none">{node.q},{node.r}</text>}
+          {showCost && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill={costTextColor} fontSize="7" fontWeight="bold" pointerEvents="none" style={{ textShadow: isPathCell ? '0 0 2px #fff' : '0 0 3px #000' }}>{cellCost.toFixed(1)}</text>}
+          {arrow && <><line x1={arrow.line.x1} y1={arrow.line.y1} x2={arrow.line.x2} y2={arrow.line.y2} stroke={arrowStroke} strokeWidth="2" pointerEvents="none" /><line x1={arrow.line.x1} y1={arrow.line.y1} x2={arrow.line.x2} y2={arrow.line.y2} stroke={arrowColor} strokeWidth="1" pointerEvents="none" /><polygon points={arrow.head} fill={arrowColor} stroke={arrowStroke} strokeWidth="0.5" pointerEvents="none" /></>}
+        </g>
+      );
+    }
+  };
+
+  const getHeuristicLabel = (h) => { switch (h) { case 'hex': return 'Hex Distance'; case 'manhattan': return 'Manhattan'; case 'chebyshev': return 'Chebyshev'; case 'euclidean': return 'Euclidean'; default: return h; } };
+
+  return (
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', background: '#0a0a1a', minHeight: '100vh', color: '#e8e8e8' }}>
+      <nav style={{ background: 'linear-gradient(90deg, #1a1a2e, #16213e)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid #0f3460' }}>
+        <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, background: 'linear-gradient(90deg, #64b5f6, #ffc107)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginRight: '16px' }}>⬡ Pathfinding Visualizer</h1>
+        <select value={gridType} onChange={(e) => setGridType(e.target.value)} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}><option value="hex">Hex Grid (6-dir)</option><option value="square4">Square (4-dir)</option><option value="square8">Square (8-dir)</option></select>
+        <select value={selectedAlgorithm} onChange={(e) => setSelectedAlgorithm(e.target.value)} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}><option value="dijkstra">Dijkstra's</option><option value="aStar">A* Search</option><option value="greedyBestFirst">Greedy Best-first</option><option value="swarm">Swarm</option><option value="convergentSwarm">Convergent Swarm</option><option value="bidirectionalSwarm">Bidirectional Swarm</option><option value="flowField">Flow Field</option><option value="bfs">Breadth-first</option><option value="dfs">Depth-first</option></select>
+        {['aStar', 'greedyBestFirst', 'swarm', 'convergentSwarm', 'bidirectionalSwarm'].includes(selectedAlgorithm) && <select value={heuristic} onChange={(e) => setHeuristic(e.target.value)} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{gridConfig.heuristics.map(h => <option key={h} value={h}>{getHeuristicLabel(h)}</option>)}</select>}
+        {selectedAlgorithm === 'aStar' && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(100, 181, 246, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #1e88e5' }}><span style={{ fontSize: '10px', color: '#90a4ae' }}>w:</span><input type="range" min="0" max="10" step="0.1" value={heuristicWeight} onChange={(e) => setHeuristicWeight(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '80px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#88CCEE' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: heuristicWeight <= 1 ? '#88CCEE' : heuristicWeight < 3 ? '#DDAA00' : '#EE7733', minWidth: '30px' }}>{heuristicWeight >= 10 ? '∞' : heuristicWeight.toFixed(1)}</span></div>}
+        <button onClick={runAlgorithm} disabled={isRunning} style={{ background: 'linear-gradient(90deg, #0077BB, #88CCEE)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 20px', cursor: isRunning ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '14px', boxShadow: '0 2px 8px rgba(0, 119, 187, 0.4)' }}>{isRunning ? 'Running...' : 'Visualize!'}</button>
+        <button onClick={clearPath} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Clear Path</button>
+        <button onClick={clearBoard} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Clear Board</button>
+        <select value={speed} onChange={(e) => setSpeed(e.target.value)} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}><option value="fast">Fast</option><option value="average">Medium</option><option value="slow">Slow</option></select>
+      </nav>
+      <nav style={{ background: 'rgba(15, 52, 96, 0.8)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', borderBottom: '1px solid #0f3460' }}>
+        <button onClick={generateMaze} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Random Walls</button>
+        <div style={{ width: '1px', height: '24px', background: '#0f3460' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(170, 68, 153, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #AA4499' }}><span style={{ fontSize: '12px', color: '#AA4499' }}>Unit:</span>{gridConfig.unitSizes.map(size => <button key={size} onClick={() => setUnitSize(size)} disabled={isRunning} style={{ background: unitSize === size ? '#AA4499' : '#16213e', color: '#e8e8e8', border: `1px solid ${unitSize === size ? '#AA4499' : '#0f3460'}`, borderRadius: '4px', padding: '4px 8px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '11px', fontWeight: unitSize === size ? 'bold' : 'normal' }}>{gridConfig.unitLabels[size]}</button>)}</div>
+        <div style={{ width: '100px', display: 'flex', justifyContent: 'center' }}>{unitSize > 1 ? <button onClick={() => setCanSnake(!canSnake)} disabled={isRunning} style={{ background: canSnake ? '#DDAA00' : '#16213e', color: canSnake ? '#000' : '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: canSnake ? 'bold' : 'normal', width: '100%' }}>{canSnake ? '🐍 Snake ✓' : '🐍 Snake'}</button> : <span style={{ color: '#455a64', fontSize: '11px' }}>(1-unit)</span>}</div>
+        {unitSize > 1 && canSnake && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(221, 170, 0, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #DDAA00' }}><span style={{ fontSize: '11px', color: '#DDAA00' }}>Cost:</span><input type="range" min="0" max="10" step="0.5" value={snakePenalty} onChange={(e) => setSnakePenalty(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '60px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#DDAA00' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: '#DDAA00' }}>{snakePenalty.toFixed(1)}</span></div>}
+        <div style={{ width: '1px', height: '24px', background: '#0f3460' }} />
+        <button onClick={() => setShowCellNumbers(!showCellNumbers)} style={{ background: showCellNumbers ? '#2196f3' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showCellNumbers ? '🔢 Coords ✓' : '🔢 Coords'}</button>
+        <button onClick={() => { setShowCostOverlay(!showCostOverlay); if (!showCostOverlay && selectedAlgorithm === 'flowField') setShowFlowVectors(false); }} style={{ background: showCostOverlay ? '#e91e63' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showCostOverlay ? '💰 Costs ✓' : '💰 Costs'}</button>
+        {selectedAlgorithm === 'flowField' && <button onClick={() => { setShowFlowVectors(!showFlowVectors); if (!showFlowVectors) setShowCostOverlay(false); }} style={{ background: showFlowVectors ? '#00bcd4' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showFlowVectors ? '→ Arrows ✓' : '→ Arrows'}</button>}
+      </nav>
+      <div style={{ background: 'rgba(22, 33, 62, 0.9)', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid #0f3460', fontSize: '12px' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#0077BB', borderRadius: 2 }}></span> Start</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#EE7733', borderRadius: 2 }}></span> Target</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#0d0d1a', borderRadius: 2, border: '1px solid #333' }}></span> Wall</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#88CCEE', borderRadius: 2 }}></span> Visited</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#FFDD44', borderRadius: 2 }}></span> Path</span></div>
+        <div style={{ display: 'flex', gap: '16px' }}><span>Visited: <strong style={{ color: '#88CCEE' }}>{stats.visited}</strong></span><span>Path: <strong style={{ color: '#FFDD44' }}>{stats.pathLength}</strong></span><span>Time: <strong style={{ color: '#ffc107' }}>{stats.time}ms</strong></span></div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '20px', background: '#0a0a1a', userSelect: 'none' }}><svg ref={svgRef} width={SVG_WIDTH} height={SVG_HEIGHT} style={{ background: '#0d0d1a', borderRadius: '8px', userSelect: 'none' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onDragStart={(e) => e.preventDefault()}>{Array.from(grid.values()).map(node => renderCell(node))}</svg></div>
+      <div style={{ background: 'rgba(15, 52, 96, 0.6)', padding: '12px 16px', textAlign: 'center', fontSize: '12px', color: '#90a4ae' }}><strong style={{ color: '#88CCEE' }}>{gridType === 'hex' ? 'Hex Grid' : gridType === 'square4' ? 'Square (4-dir)' : 'Square (8-dir)'}</strong>{' • '}<strong style={{ color: '#FFDD44' }}>{selectedAlgorithm === 'aStar' ? `A* (w=${heuristicWeight >= 10 ? '∞' : heuristicWeight.toFixed(1)})` : selectedAlgorithm}</strong>{' • '}Heuristic: <strong style={{ color: '#AA4499' }}>{getHeuristicLabel(heuristic)}</strong>{unitSize > 1 && <>{' • '}Unit: <strong style={{ color: '#AA4499' }}>{gridConfig.unitLabels[unitSize]}</strong>{canSnake && <> (Snake: {snakePenalty.toFixed(1)})</>}</>}</div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<PathfindingVisualizer />);
+  </script>
+</body>
+</html>
