@@ -38,8 +38,50 @@ const GridUtils = {
           { q: 0, r: -1 }, { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
         ],
       },
-      unitSizes: [1, 3, 7],
-      unitLabels: { 1: '1⬡', 3: '3△', 7: '7⬢' },
+      // Oblong formations - line formations with orientations
+      oblongFormations: {
+        '3L': {
+          orientations: [
+            // Orientation 0: along q-axis (E-W line)
+            [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: -1, r: 0 }],
+            // Orientation 1: along r-axis (NW-SE line when r changes)
+            [{ q: 0, r: 0 }, { q: 0, r: 1 }, { q: 0, r: -1 }],
+            // Orientation 2: along third axis (NE-SW diagonal)
+            [{ q: 0, r: 0 }, { q: 1, r: -1 }, { q: -1, r: 1 }],
+          ],
+          // Perpendicular = directions that move the whole line forward (march direction)
+          // Parallel = directions along the line (sidestep)
+          perpendicularDirs: [
+            [1, 2, 4, 5], // Orientation 0 (E-W line): march NE, NW, SW, SE
+            [0, 1, 3, 4], // Orientation 1 (NW-SE line): march E, NE, W, SW
+            [0, 2, 3, 5], // Orientation 2 (NE-SW line): march E, NW, W, SE
+          ],
+          parallelDirs: [
+            [0, 3], // Orientation 0: sidestep E, W
+            [2, 5], // Orientation 1: sidestep NW, SE
+            [1, 4], // Orientation 2: sidestep NE, SW
+          ],
+        },
+        '5L': {
+          orientations: [
+            [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: -1, r: 0 }, { q: 2, r: 0 }, { q: -2, r: 0 }],
+            [{ q: 0, r: 0 }, { q: 0, r: 1 }, { q: 0, r: -1 }, { q: 0, r: 2 }, { q: 0, r: -2 }],
+            [{ q: 0, r: 0 }, { q: 1, r: -1 }, { q: -1, r: 1 }, { q: 2, r: -2 }, { q: -2, r: 2 }],
+          ],
+          perpendicularDirs: [
+            [1, 2, 4, 5],
+            [0, 1, 3, 4],
+            [0, 2, 3, 5],
+          ],
+          parallelDirs: [
+            [0, 3],
+            [2, 5],
+            [1, 4],
+          ],
+        },
+      },
+      unitSizes: [1, 3, 7, '3L', '5L'],
+      unitLabels: { 1: '1⬡', 3: '3△', 7: '7⬢', '3L': '3━', '5L': '5━' },
       heuristics: ['hex', 'euclidean'],
       defaultHeuristic: 'hex',
     },
@@ -56,8 +98,40 @@ const GridUtils = {
           { q: -1, r: 1 }, { q: 0, r: 1 }, { q: 1, r: 1 }
         ],
       },
-      unitSizes: [1, 4, 9],
-      unitLabels: { 1: '1□', 4: '2×2', 9: '3×3' },
+      oblongFormations: {
+        '3L': {
+          orientations: [
+            // Orientation 0: horizontal (along q-axis)
+            [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: -1, r: 0 }],
+            // Orientation 1: vertical (along r-axis)
+            [{ q: 0, r: 0 }, { q: 0, r: 1 }, { q: 0, r: -1 }],
+          ],
+          perpendicularDirs: [
+            [0, 2], // Horizontal line: N, S are perpendicular
+            [1, 3], // Vertical line: E, W are perpendicular
+          ],
+          parallelDirs: [
+            [1, 3], // Horizontal: E, W
+            [0, 2], // Vertical: N, S
+          ],
+        },
+        '5L': {
+          orientations: [
+            [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: -1, r: 0 }, { q: 2, r: 0 }, { q: -2, r: 0 }],
+            [{ q: 0, r: 0 }, { q: 0, r: 1 }, { q: 0, r: -1 }, { q: 0, r: 2 }, { q: 0, r: -2 }],
+          ],
+          perpendicularDirs: [
+            [0, 2],
+            [1, 3],
+          ],
+          parallelDirs: [
+            [1, 3],
+            [0, 2],
+          ],
+        },
+      },
+      unitSizes: [1, 4, 9, '3L', '5L'],
+      unitLabels: { 1: '1□', 4: '2×2', 9: '3×3', '3L': '3━', '5L': '5━' },
       heuristics: ['manhattan', 'euclidean'],
       defaultHeuristic: 'manhattan',
     },
@@ -75,8 +149,54 @@ const GridUtils = {
           { q: -1, r: 1 }, { q: 0, r: 1 }, { q: 1, r: 1 }
         ],
       },
-      unitSizes: [1, 4, 9],
-      unitLabels: { 1: '1□', 4: '2×2', 9: '3×3' },
+      oblongFormations: {
+        '3L': {
+          orientations: [
+            // Orientation 0: horizontal
+            [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: -1, r: 0 }],
+            // Orientation 1: vertical
+            [{ q: 0, r: 0 }, { q: 0, r: 1 }, { q: 0, r: -1 }],
+            // Orientation 2: diagonal NE-SW
+            [{ q: 0, r: 0 }, { q: 1, r: -1 }, { q: -1, r: 1 }],
+            // Orientation 3: diagonal NW-SE
+            [{ q: 0, r: 0 }, { q: -1, r: -1 }, { q: 1, r: 1 }],
+          ],
+          perpendicularDirs: [
+            [0, 1, 4, 5, 7], // Horizontal: N, NE, S, SW, NW (not E, SE, W)
+            [1, 2, 3, 6, 7], // Vertical: NE, E, SE, W, NW (not N, S)
+            [0, 2, 4, 6],     // Diag NE-SW: N, E, S, W
+            [0, 2, 4, 6],     // Diag NW-SE: N, E, S, W
+          ],
+          parallelDirs: [
+            [2, 6],    // Horizontal: E, W
+            [0, 4],    // Vertical: N, S
+            [1, 5],    // Diag NE-SW: NE, SW
+            [3, 7],    // Diag NW-SE: SE, NW
+          ],
+        },
+        '5L': {
+          orientations: [
+            [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: -1, r: 0 }, { q: 2, r: 0 }, { q: -2, r: 0 }],
+            [{ q: 0, r: 0 }, { q: 0, r: 1 }, { q: 0, r: -1 }, { q: 0, r: 2 }, { q: 0, r: -2 }],
+            [{ q: 0, r: 0 }, { q: 1, r: -1 }, { q: -1, r: 1 }, { q: 2, r: -2 }, { q: -2, r: 2 }],
+            [{ q: 0, r: 0 }, { q: -1, r: -1 }, { q: 1, r: 1 }, { q: -2, r: -2 }, { q: 2, r: 2 }],
+          ],
+          perpendicularDirs: [
+            [0, 1, 4, 5, 7],
+            [1, 2, 3, 6, 7],
+            [0, 2, 4, 6],
+            [0, 2, 4, 6],
+          ],
+          parallelDirs: [
+            [2, 6],
+            [0, 4],
+            [1, 5],
+            [3, 7],
+          ],
+        },
+      },
+      unitSizes: [1, 4, 9, '3L', '5L'],
+      unitLabels: { 1: '1□', 4: '2×2', 9: '3×3', '3L': '3━', '5L': '5━' },
       heuristics: ['chebyshev', 'euclidean', 'manhattan'],
       defaultHeuristic: 'chebyshev',
     },
@@ -88,11 +208,22 @@ const GridUtils = {
     const config = GridUtils.getConfig(gridType);
     return config.formations[size] || config.formations[1];
   },
-  getFormationCells: (gridType, centerQ, centerR, size) => {
+  getFormationCells: (gridType, centerQ, centerR, size, orientation = 0) => {
+    if (GridUtils.isOblongUnit(size)) {
+      return GridUtils.getOblongCells(gridType, centerQ, centerR, size, orientation);
+    }
     const offsets = GridUtils.getFormationOffsets(gridType, size);
     return offsets.map(offset => ({ q: centerQ + offset.q, r: centerR + offset.r }));
   },
   canFormationFit: (grid, gridType, centerQ, centerR, size, ignoreKeys = new Set()) => {
+    // For oblong units, check if any orientation fits
+    if (GridUtils.isOblongUnit(size)) {
+      const numOrients = GridUtils.getNumOrientations(gridType, size);
+      for (let o = 0; o < numOrients; o++) {
+        if (GridUtils.canOblongFit(grid, gridType, centerQ, centerR, size, o)) return true;
+      }
+      return false;
+    }
     const cells = GridUtils.getFormationCells(gridType, centerQ, centerR, size);
     for (const cell of cells) {
       const key = GridUtils.cellKey(cell.q, cell.r);
@@ -115,6 +246,109 @@ const GridUtils = {
       }
     }
     return blockedNeighbors * 0.1;
+  },
+  getScaledSnakePenalty: (basePenalty, unitSize) => basePenalty * Math.sqrt(typeof unitSize === 'string' ? parseInt(unitSize) : unitSize),
+  
+  // Oblong formation helpers
+  isOblongUnit: (unitSize) => typeof unitSize === 'string' && unitSize.endsWith('L'),
+  getOblongSize: (unitSize) => typeof unitSize === 'string' ? parseInt(unitSize) : unitSize,
+  getEffectiveSize: (unitSize) => typeof unitSize === 'string' ? parseInt(unitSize) : unitSize,
+  isMultiUnit: (unitSize) => unitSize !== 1 && unitSize !== '1',
+  getOblongFormation: (gridType, unitSize) => {
+    const config = GridUtils.CONFIGS[gridType];
+    return config?.oblongFormations?.[unitSize] || null;
+  },
+  getOblongCells: (gridType, centerQ, centerR, unitSize, orientation) => {
+    const oblong = GridUtils.getOblongFormation(gridType, unitSize);
+    if (!oblong) return [{ q: centerQ, r: centerR }];
+    const cells = oblong.orientations[orientation] || oblong.orientations[0];
+    return cells.map(c => ({ q: centerQ + c.q, r: centerR + c.r }));
+  },
+  canOblongFit: (grid, gridType, centerQ, centerR, unitSize, orientation) => {
+    const cells = GridUtils.getOblongCells(gridType, centerQ, centerR, unitSize, orientation);
+    for (const cell of cells) {
+      const key = GridUtils.cellKey(cell.q, cell.r);
+      const node = grid.get(key);
+      if (!node || node.isWall) return false;
+    }
+    return true;
+  },
+  getNumOrientations: (gridType, unitSize) => {
+    const oblong = GridUtils.getOblongFormation(gridType, unitSize);
+    return oblong ? oblong.orientations.length : 1;
+  },
+  // Calculate formation width perpendicular to a given travel direction
+  getFormationWidthForDirection: (gridType, unitSize, orientation, travelAngle, cellSize) => {
+    if (unitSize === 1) return cellSize * 0.6;
+    
+    // Get formation cells
+    const cells = GridUtils.getFormationCells(gridType, 0, 0, unitSize, orientation);
+    if (cells.length <= 1) return cellSize * 0.6;
+    
+    // Convert cells to pixel positions
+    const pixelCells = cells.map(c => GridUtils.cellToPixel(gridType, c.q, c.r, cellSize));
+    
+    // Calculate perpendicular direction to travel
+    const perpAngle = travelAngle + Math.PI / 2;
+    const perpX = Math.cos(perpAngle);
+    const perpY = Math.sin(perpAngle);
+    
+    // Project all cells onto perpendicular axis and find extent
+    let minProj = Infinity, maxProj = -Infinity;
+    for (const p of pixelCells) {
+      const proj = p.x * perpX + p.y * perpY;
+      minProj = Math.min(minProj, proj);
+      maxProj = Math.max(maxProj, proj);
+    }
+    
+    // Return full width (extent + cell size for the cells themselves)
+    return (maxProj - minProj) + cellSize;
+  },
+  isPerpendicularMove: (gridType, unitSize, orientation, dirIndex) => {
+    const oblong = GridUtils.getOblongFormation(gridType, unitSize);
+    if (!oblong) return true;
+    return oblong.perpendicularDirs[orientation]?.includes(dirIndex) ?? true;
+  },
+  getRotationCost: (fromOrient, toOrient, numOrientations) => {
+    if (fromOrient === toOrient) return 0;
+    // Calculate minimum rotation steps (can rotate either direction)
+    const diff = Math.abs(fromOrient - toOrient);
+    const steps = Math.min(diff, numOrientations - diff);
+    return steps * 0.5; // 0.5 cost per 60° rotation (hex) or 90° (square4) or 45° (square8)
+  },
+  findBestOrientationForMove: (grid, gridType, fromQ, fromR, toQ, toR, unitSize, currentOrientation, canSnake, snakePenalty = 1.5) => {
+    const oblong = GridUtils.getOblongFormation(gridType, unitSize);
+    if (!oblong) return { orientation: 0, canFit: true, cost: 0, isSnaking: false };
+    
+    const numOrients = oblong.orientations.length;
+    const dirs = GridUtils.getDirections(gridType);
+    const dq = toQ - fromQ, dr = toR - fromR;
+    const dirIndex = dirs.findIndex(d => d.q === dq && d.r === dr);
+    const effectiveSize = GridUtils.getEffectiveSize(unitSize);
+    const scaledSnakePenalty = GridUtils.getScaledSnakePenalty(snakePenalty, effectiveSize);
+    
+    let bestResult = null;
+    
+    // Try all orientations, prefer ones where move is perpendicular (in formation)
+    for (let orient = 0; orient < numOrients; orient++) {
+      const canFit = GridUtils.canOblongFit(grid, gridType, toQ, toR, unitSize, orient);
+      const isPerpendicular = GridUtils.isPerpendicularMove(gridType, unitSize, orient, dirIndex);
+      
+      // Parallel movement (not perpendicular) OR not fitting = snaking, requires canSnake
+      const needsSnake = !isPerpendicular || !canFit;
+      if (needsSnake && !canSnake) continue;
+      
+      const rotCost = GridUtils.getRotationCost(currentOrientation, orient, numOrients);
+      // Snaking (parallel move or doesn't fit) uses snake penalty
+      const snakeCost = needsSnake ? scaledSnakePenalty : 0;
+      const totalCost = rotCost + snakeCost;
+      
+      if (!bestResult || totalCost < bestResult.cost) {
+        bestResult = { orientation: orient, canFit, cost: totalCost, isSnaking: needsSnake, isPerpendicular };
+      }
+    }
+    
+    return bestResult || { orientation: currentOrientation, canFit: false, cost: 999, isSnaking: true };
   },
   cellKey: (q, r) => `${q},${r}`,
   parseKey: (key) => { const [q, r] = key.split(',').map(Number); return { q, r }; },
@@ -172,6 +406,198 @@ const GridUtils = {
     if (gridType === 'square8' && dq !== 0 && dr !== 0) return baseWeight * 1.414;
     return baseWeight;
   },
+  // Line of Sight functions
+  hexLerp: (a, b, t) => ({ q: a.q + (b.q - a.q) * t, r: a.r + (b.r - a.r) * t }),
+  hexRound: (q, r) => {
+    // Convert to cube, round, convert back
+    const s = -q - r;
+    let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
+    const qDiff = Math.abs(rq - q), rDiff = Math.abs(rr - r), sDiff = Math.abs(rs - s);
+    if (qDiff > rDiff && qDiff > sDiff) rq = -rr - rs;
+    else if (rDiff > sDiff) rr = -rq - rs;
+    return { q: rq, r: rr };
+  },
+  getHexLine: (q1, r1, q2, r2) => {
+    const dist = Math.max(Math.abs(q2 - q1), Math.abs(r2 - r1), Math.abs((q1 + r1) - (q2 + r2)));
+    if (dist === 0) return [{ q: q1, r: r1 }];
+    const cells = [];
+    for (let i = 0; i <= dist; i++) {
+      const t = i / dist;
+      const lerped = GridUtils.hexLerp({ q: q1 + 0.000001, r: r1 + 0.000001 }, { q: q2, r: r2 }, t);
+      cells.push(GridUtils.hexRound(lerped.q, lerped.r));
+    }
+    return cells;
+  },
+  hasLineOfSight: (grid, gridType, q1, r1, q2, r2) => {
+    if (gridType !== 'hex') {
+      // Square grid: use Bresenham
+      const cells = [];
+      let x0 = q1, y0 = r1, x1 = q2, y1 = r2;
+      const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+      const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      let err = dx - dy;
+      while (true) {
+        cells.push({ q: x0, r: y0 });
+        if (x0 === x1 && y0 === y1) break;
+        const e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; x0 += sx; }
+        if (e2 < dx) { err += dx; y0 += sy; }
+      }
+      return cells.every(c => { const node = grid.get(GridUtils.cellKey(c.q, c.r)); return node && !node.isWall; });
+    }
+    const line = GridUtils.getHexLine(q1, r1, q2, r2);
+    return line.every(c => { const node = grid.get(GridUtils.cellKey(c.q, c.r)); return node && !node.isWall; });
+  },
+  // Formation LOS: check all cells in formation have clear LOS
+  formationHasLOS: (grid, gridType, fromQ, fromR, toQ, toR, unitSize, fromOrient = 0, toOrient = 0) => {
+    if (unitSize === 1) return GridUtils.hasLineOfSight(grid, gridType, fromQ, fromR, toQ, toR);
+    
+    const fromCells = GridUtils.getFormationCells(gridType, fromQ, fromR, unitSize, fromOrient);
+    const toCells = GridUtils.getFormationCells(gridType, toQ, toR, unitSize, toOrient);
+    
+    if (fromCells.length !== toCells.length) return false;
+    
+    // Check LOS for each corresponding cell pair
+    for (let i = 0; i < fromCells.length; i++) {
+      if (!GridUtils.hasLineOfSight(grid, gridType, fromCells[i].q, fromCells[i].r, toCells[i].q, toCells[i].r)) {
+        return false;
+      }
+    }
+    
+    // For rotating formations, also check intermediate orientations
+    if (GridUtils.isOblongUnit(unitSize) && fromOrient !== toOrient) {
+      const numOrients = GridUtils.getNumOrientations(gridType, unitSize);
+      const dist = Math.max(Math.abs(toQ - fromQ), Math.abs(toR - fromR), Math.abs((fromQ + fromR) - (toQ + toR)));
+      const orientDiff = ((toOrient - fromOrient) % numOrients + numOrients) % numOrients;
+      const orientStep = orientDiff <= numOrients / 2 ? 1 : -1;
+      
+      // Sample along the path
+      const samples = Math.max(dist, Math.abs(toOrient - fromOrient) * 2);
+      for (let i = 1; i < samples; i++) {
+        const t = i / samples;
+        const midQ = Math.round(fromQ + (toQ - fromQ) * t);
+        const midR = Math.round(fromR + (toR - fromR) * t);
+        // Interpolate orientation (step-wise, not continuous)
+        const orientProgress = Math.floor(t * Math.abs(toOrient - fromOrient));
+        const midOrient = (fromOrient + orientStep * orientProgress + numOrients) % numOrients;
+        
+        // Check formation fits at this intermediate point
+        if (!GridUtils.canOblongFit(grid, gridType, midQ, midR, unitSize, midOrient)) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  },
+  // Smooth a path using LOS checks - reduces waypoints while maintaining clearance
+  // Returns the full visual path (all hexes along smooth lines) with waypoint markers
+  smoothPath: (grid, gridType, path, unitSize) => {
+    if (!path || path.length <= 2) return { visualPath: path, waypoints: path ? [...path] : [] };
+    
+    // Validate path nodes have required properties
+    if (!path[0]?.key) return { visualPath: path, waypoints: [...path] };
+    
+    // First, find the waypoints (nodes we must pass through)
+    const waypoints = [path[0]];
+    let current = 0;
+    
+    while (current < path.length - 1) {
+      const fromNode = path[current];
+      if (!fromNode?.key) { current++; continue; }
+      
+      const fromPos = GridUtils.parseKey(fromNode.key);
+      const fromOrient = fromNode.orientation || 0;
+      const fromCompact = fromNode.isCompact !== false;
+      
+      // Find furthest visible node
+      let furthest = current + 1;
+      
+      for (let i = path.length - 1; i > current + 1; i--) {
+        const toNode = path[i];
+        if (!toNode?.key) continue;
+        
+        const toPos = GridUtils.parseKey(toNode.key);
+        const toOrient = toNode.orientation || 0;
+        const toCompact = toNode.isCompact !== false;
+        
+        let hasLOS = false;
+        
+        if (fromCompact && toCompact) {
+          hasLOS = GridUtils.formationHasLOS(grid, gridType, fromPos.q, fromPos.r, toPos.q, toPos.r, unitSize, fromOrient, toOrient);
+        } else {
+          hasLOS = GridUtils.hasLineOfSight(grid, gridType, fromPos.q, fromPos.r, toPos.q, toPos.r);
+        }
+        
+        if (hasLOS) {
+          furthest = i;
+          break;
+        }
+      }
+      
+      current = furthest;
+      if (path[current]) waypoints.push(path[current]);
+    }
+    
+    // Now expand waypoints back into a full visual path by interpolating between them
+    if (waypoints.length <= 1) return { visualPath: path, waypoints };
+    
+    const visualPath = [];
+    for (let w = 0; w < waypoints.length - 1; w++) {
+      const fromWp = waypoints[w];
+      const toWp = waypoints[w + 1];
+      const fromPos = GridUtils.parseKey(fromWp.key);
+      const toPos = GridUtils.parseKey(toWp.key);
+      
+      // Get all hexes along the line between waypoints
+      const lineCells = gridType === 'hex' 
+        ? GridUtils.getHexLine(fromPos.q, fromPos.r, toPos.q, toPos.r)
+        : GridUtils.getSquareLine(fromPos.q, fromPos.r, toPos.q, toPos.r);
+      
+      // Add each cell along the line (except last to avoid duplicates)
+      for (let i = 0; i < lineCells.length - 1; i++) {
+        const cell = lineCells[i];
+        const key = GridUtils.cellKey(cell.q, cell.r);
+        // Interpolate orientation if both endpoints have orientations
+        const t = lineCells.length > 1 ? i / (lineCells.length - 1) : 0;
+        const fromOrient = fromWp.orientation || 0;
+        const toOrient = toWp.orientation || 0;
+        const orientation = Math.round(fromOrient + (toOrient - fromOrient) * t);
+        
+        visualPath.push({
+          key,
+          isCompact: fromWp.isCompact !== false && toWp.isCompact !== false,
+          orientation,
+          isWaypoint: i === 0 // Mark first cell of each segment as waypoint
+        });
+      }
+    }
+    
+    // Add the final waypoint
+    const lastWp = waypoints[waypoints.length - 1];
+    visualPath.push({
+      ...lastWp,
+      isWaypoint: true
+    });
+    
+    return { visualPath, waypoints };
+  },
+  // Helper for square grid line drawing
+  getSquareLine: (q1, r1, q2, r2) => {
+    const cells = [];
+    let x0 = q1, y0 = r1, x1 = q2, y1 = r2;
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    while (true) {
+      cells.push({ q: x0, r: y0 });
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+    return cells;
+  },
 };
 
 class MinHeap {
@@ -208,59 +634,129 @@ class MinHeap {
 }
 
 const Algorithms = {
-  aStar: (grid, start, end, heuristicWeight = 1, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
+  aStar: (grid, start, end, heuristicWeight = 1, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5, initialOrientation = null) => {
     const openSet = new MinHeap();
     const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
     const gScore = new Map(), fScore = new Map(), previous = new Map(), visited = [], formationState = new Map();
+    const orientationState = new Map(); // Track orientation for oblong units
+    const isOblong = GridUtils.isOblongUnit(unitSize);
+    const numOrientations = isOblong ? GridUtils.getNumOrientations(gridType, unitSize) : 1;
+    
+    // For oblong units, use provided orientation or find best starting orientation
+    let startOrientation = initialOrientation ?? 0;
+    let startFits = true;
+    if (isOblong) {
+      if (initialOrientation === null) {
+        // Auto-calculate best orientation perpendicular to goal direction
+        const oblong = GridUtils.getOblongFormation(gridType, unitSize);
+        const dirs = GridUtils.getDirections(gridType);
+        const dq = end.q - start.q, dr = end.r - start.r;
+        let bestDirIdx = 0, bestDot = -Infinity;
+        dirs.forEach((d, i) => {
+          const dot = d.q * dq + d.r * dr;
+          if (dot > bestDot) { bestDot = dot; bestDirIdx = i; }
+        });
+        let bestOrient = 0;
+        for (let o = 0; o < numOrientations; o++) {
+          if (GridUtils.canOblongFit(grid, gridType, start.q, start.r, unitSize, o)) {
+            if (oblong.perpendicularDirs[o].includes(bestDirIdx)) { bestOrient = o; break; }
+            if (bestOrient === 0) bestOrient = o;
+          }
+        }
+        startOrientation = bestOrient;
+      }
+      startFits = GridUtils.canOblongFit(grid, gridType, start.q, start.r, unitSize, startOrientation);
+    } else if (unitSize !== 1) {
+      startFits = GridUtils.canFormationFit(grid, gridType, start.q, start.r, unitSize);
+    }
+    if (!startFits && !canSnake) return { previous, visited, endKey: null, gScore, fScore, formationState, orientationState };
+    
     gScore.set(startKey, 0);
     fScore.set(startKey, heuristicWeight * GridUtils.getDistance(gridType, heuristic, start.q, start.r, end.q, end.r));
-    formationState.set(startKey, true);
+    formationState.set(startKey, startFits);
+    orientationState.set(startKey, startOrientation);
     openSet.push(startKey, fScore.get(startKey));
     const inOpenSet = new Set([startKey]);
+    
     while (!openSet.isEmpty()) {
       const currentKey = openSet.pop();
       inOpenSet.delete(currentKey);
-      if (currentKey === endKey) return { previous, visited, endKey, gScore, fScore, formationState };
+      if (currentKey === endKey) return { previous, visited, endKey, gScore, fScore, formationState, orientationState };
       const current = GridUtils.parseKey(currentKey);
       visited.push(currentKey);
       const currentNode = grid.get(currentKey);
       if (!currentNode) continue;
       const currentIsCompact = formationState.get(currentKey) ?? true;
+      const currentOrientation = orientationState.get(currentKey) ?? 0;
+      
       for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
         const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
         const neighborNode = grid.get(neighborKey);
         if (!neighborNode || neighborNode.isWall) continue;
-        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
-        if (!canFitCompact && !canSnake) continue;
-        const dq = neighbor.q - current.q, dr = neighbor.r - current.r;
-        let moveCost = GridUtils.getMovementCost(gridType, dq, dr, 1);
-        let neighborIsCompact = canFitCompact;
-        if (unitSize > 1) {
-          if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
-          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        
+        let canFitCompact, neighborOrientation, rotationCost = 0, parallelPenalty = 0;
+        
+        if (isOblong) {
+          // Find best orientation for this move
+          const moveResult = GridUtils.findBestOrientationForMove(
+            grid, gridType, current.q, current.r, neighbor.q, neighbor.r, 
+            unitSize, currentOrientation, canSnake, snakePenalty
+          );
+          if (moveResult.cost >= 999) continue; // No valid move found
+          canFitCompact = !moveResult.isSnaking; // Snaking = not compact
+          neighborOrientation = moveResult.orientation;
+          rotationCost = moveResult.cost;
+        } else {
+          canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+          if (!canFitCompact && !canSnake) continue;
+          neighborOrientation = 0;
         }
+        
+        const dq = neighbor.q - current.q, dr = neighbor.r - current.r;
+        let moveCost = GridUtils.getMovementCost(gridType, dq, dr, 1) + rotationCost;
+        let neighborIsCompact = canFitCompact;
+        
+        const effectiveUnitSize = isOblong ? GridUtils.getOblongSize(unitSize) : unitSize;
+        // For non-oblong multi-unit, handle snake costs here
+        if (effectiveUnitSize > 1 && !isOblong) {
+          if (canFitCompact) {
+            if (!isOblong) moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize);
+            if (!currentIsCompact) moveCost += snakePenalty * 0.3; // Reforming bonus
+          } else if (canSnake) {
+            neighborIsCompact = false;
+            moveCost += GridUtils.getScaledSnakePenalty(snakePenalty, effectiveUnitSize) * (currentIsCompact ? 1 : 0.15);
+          }
+        }
+        
         const tentativeG = gScore.get(currentKey) + moveCost;
         if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
           previous.set(neighborKey, currentKey);
           gScore.set(neighborKey, tentativeG);
           formationState.set(neighborKey, neighborIsCompact);
+          orientationState.set(neighborKey, neighborOrientation);
           const f = tentativeG + heuristicWeight * GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, end.q, end.r);
           fScore.set(neighborKey, f);
           if (!inOpenSet.has(neighborKey)) { openSet.push(neighborKey, f); inOpenSet.add(neighborKey); }
         }
       }
     }
-    return { previous, visited, endKey: null, gScore, fScore, formationState };
+    return { previous, visited, endKey: null, gScore, fScore, formationState, orientationState };
   },
-  dijkstra: (grid, start, end, gridType = 'hex', unitSize = 1, canSnake = false, snakePenalty = 1.5) => Algorithms.aStar(grid, start, end, 0, gridType, 'default', unitSize, canSnake, snakePenalty),
+  dijkstra: (grid, start, end, gridType = 'hex', unitSize = 1, canSnake = false, snakePenalty = 1.5, initialOrientation = null) => Algorithms.aStar(grid, start, end, 0, gridType, 'default', unitSize, canSnake, snakePenalty, initialOrientation),
   greedyBestFirst: (grid, start, end, gridType = 'hex', heuristic = 'default', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
     const openSet = new MinHeap();
     const startKey = GridUtils.cellKey(start.q, start.r), endKey = GridUtils.cellKey(end.q, end.r);
     const previous = new Map(), visited = [], gScore = new Map(), formationState = new Map();
+    
+    // Check if formation fits at start
+    const startFits = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, start.q, start.r, unitSize);
+    if (!startFits && !canSnake) return { previous, visited, endKey: null, gScore, formationState };
+    
     openSet.push(startKey, GridUtils.getDistance(gridType, heuristic, start.q, start.r, end.q, end.r));
     gScore.set(startKey, 0);
-    formationState.set(startKey, true);
+    formationState.set(startKey, startFits);
     const inOpenSet = new Set([startKey]);
+    
     while (!openSet.isEmpty()) {
       const currentKey = openSet.pop();
       inOpenSet.delete(currentKey);
@@ -268,17 +764,33 @@ const Algorithms = {
       const current = GridUtils.parseKey(currentKey);
       visited.push(currentKey);
       const currentIsCompact = formationState.get(currentKey) ?? true;
+      
       for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
         const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
         const neighborNode = grid.get(neighborKey);
+        
+        // Skip if center cell doesn't exist or is a wall
         if (!neighborNode || neighborNode.isWall) continue;
+        // Skip if already visited
         if (previous.has(neighborKey) || neighborKey === startKey) continue;
+        
+        // Check if formation fits at this position
         const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+        
+        // Skip if formation doesn't fit and snaking is disabled
         if (!canFitCompact && !canSnake) continue;
+        
         previous.set(neighborKey, currentKey);
         formationState.set(neighborKey, canFitCompact);
+        
         let moveCost = 1;
-        if (unitSize > 1) { if (canFitCompact) moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); else if (canSnake) moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        if (GridUtils.isMultiUnit(unitSize)) {
+          if (canFitCompact) {
+            moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize);
+          } else if (canSnake) {
+            moveCost += GridUtils.getScaledSnakePenalty(snakePenalty, unitSize) * (currentIsCompact ? 1 : 0.15);
+          }
+        }
         gScore.set(neighborKey, (gScore.get(currentKey) || 0) + moveCost);
         openSet.push(neighborKey, GridUtils.getDistance(gridType, heuristic, neighbor.q, neighbor.r, end.q, end.r));
         inOpenSet.add(neighborKey);
@@ -366,9 +878,9 @@ const Algorithms = {
         const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
         if (!canFitCompact && !canSnake) continue;
         let moveCost = 1, neighborIsCompact = canFitCompact;
-        if (unitSize > 1) {
+        if (GridUtils.isMultiUnit(unitSize)) {
           if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
-          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+          else if (canSnake) { neighborIsCompact = false; moveCost += GridUtils.getScaledSnakePenalty(snakePenalty, unitSize) * (currentIsCompact ? 1 : 0.15); }
         }
         const tentativeG = gScore.get(currentKey) + moveCost;
         if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
@@ -405,9 +917,9 @@ const Algorithms = {
         const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
         if (!canFitCompact && !canSnake) continue;
         let moveCost = 1, neighborIsCompact = canFitCompact;
-        if (unitSize > 1) {
+        if (GridUtils.isMultiUnit(unitSize)) {
           if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
-          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+          else if (canSnake) { neighborIsCompact = false; moveCost += GridUtils.getScaledSnakePenalty(snakePenalty, unitSize) * (currentIsCompact ? 1 : 0.15); }
         }
         const tentativeG = gScore.get(currentKey) + moveCost;
         if (!gScore.has(neighborKey) || tentativeG < gScore.get(neighborKey)) {
@@ -448,9 +960,9 @@ const Algorithms = {
           const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
           if (!canFitCompact && !canSnake) continue;
           let moveCost = 1, neighborIsCompact = canFitCompact;
-          if (unitSize > 1) {
+          if (GridUtils.isMultiUnit(unitSize)) {
             if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
-            else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+            else if (canSnake) { neighborIsCompact = false; moveCost += GridUtils.getScaledSnakePenalty(snakePenalty, unitSize) * (currentIsCompact ? 1 : 0.15); }
           }
           const tentativeG = gScoreStart.get(currentKey) + moveCost;
           if (!gScoreStart.has(neighborKey) || tentativeG < gScoreStart.get(neighborKey)) {
@@ -471,9 +983,9 @@ const Algorithms = {
           const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
           if (!canFitCompact && !canSnake) continue;
           let moveCost = 1, neighborIsCompact = canFitCompact;
-          if (unitSize > 1) {
+          if (GridUtils.isMultiUnit(unitSize)) {
             if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
-            else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+            else if (canSnake) { neighborIsCompact = false; moveCost += GridUtils.getScaledSnakePenalty(snakePenalty, unitSize) * (currentIsCompact ? 1 : 0.15); }
           }
           const tentativeG = gScoreEnd.get(currentKey) + moveCost;
           if (!gScoreEnd.has(neighborKey) || tentativeG < gScoreEnd.get(neighborKey)) {
@@ -490,31 +1002,98 @@ const Algorithms = {
   flowField: (grid, start, end, gridType = 'hex', unitSize = 1, canSnake = false, snakePenalty = 1.5) => {
     const endKey = GridUtils.cellKey(end.q, end.r), startKey = GridUtils.cellKey(start.q, start.r);
     const costField = new Map(), flowVectors = new Map(), visited = [], formationState = new Map();
+    const orientationState = new Map();
+    const isOblong = GridUtils.isOblongUnit(unitSize);
+    const numOrientations = isOblong ? GridUtils.getNumOrientations(gridType, unitSize) : 1;
+    const effectiveUnitSize = GridUtils.getEffectiveSize(unitSize);
+    
     const openSet = new MinHeap();
-    costField.set(endKey, 0); formationState.set(endKey, true); openSet.push(endKey, 0);
+    costField.set(endKey, 0); 
+    formationState.set(endKey, true); 
+    orientationState.set(endKey, 0);
+    openSet.push(endKey, 0);
+    
+    // Build cost field from goal outward
     while (!openSet.isEmpty()) {
       const currentKey = openSet.pop();
       const current = GridUtils.parseKey(currentKey);
       visited.push(currentKey);
       const currentCost = costField.get(currentKey);
       const currentIsCompact = formationState.get(currentKey) ?? true;
+      const currentOrientation = orientationState.get(currentKey) ?? 0;
+      
       for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
         const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
         const neighborNode = grid.get(neighborKey);
         if (!neighborNode || neighborNode.isWall) continue;
-        const canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
-        if (!canFitCompact && !canSnake) continue;
-        const dq = neighbor.q - current.q, dr = neighbor.r - current.r;
-        let moveCost = GridUtils.getMovementCost(gridType, dq, dr, 1);
-        let neighborIsCompact = canFitCompact;
-        if (unitSize > 1) {
-          if (canFitCompact) { moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize); if (!currentIsCompact) moveCost += snakePenalty * 0.3; }
-          else if (canSnake) { neighborIsCompact = false; moveCost += currentIsCompact ? snakePenalty : snakePenalty * 0.15; }
+        
+        let canFitCompact, neighborOrientation = 0, rotationCost = 0;
+        
+        if (isOblong) {
+          // For flow field (expanding from goal), we check what orientation works at neighbor
+          // and cost to rotate from that to current orientation when following the flow
+          const oblong = GridUtils.getOblongFormation(gridType, unitSize);
+          const dirs = GridUtils.getDirections(gridType);
+          // Direction FROM neighbor TO current (the flow direction)
+          const dq = current.q - neighbor.q, dr = current.r - neighbor.r;
+          const dirIndex = dirs.findIndex(d => d.q === dq && d.r === dr);
+          const scaledSnakePenalty = GridUtils.getScaledSnakePenalty(snakePenalty, effectiveUnitSize);
+          
+          let bestOrient = 0, bestCost = Infinity, bestFits = false, bestIsSnaking = true;
+          for (let o = 0; o < numOrientations; o++) {
+            const fits = GridUtils.canOblongFit(grid, gridType, neighbor.q, neighbor.r, unitSize, o);
+            const isPerpendicular = oblong.perpendicularDirs[o]?.includes(dirIndex) ?? true;
+            
+            // Parallel movement OR not fitting = snaking
+            const needsSnake = !isPerpendicular || !fits;
+            if (needsSnake && !canSnake) continue;
+            
+            const rotCost = GridUtils.getRotationCost(o, currentOrientation, numOrientations);
+            const snakeCost = needsSnake ? scaledSnakePenalty : 0;
+            const totalCost = rotCost + snakeCost;
+            
+            if (totalCost < bestCost) {
+              bestCost = totalCost;
+              bestOrient = o;
+              bestFits = fits;
+              bestIsSnaking = needsSnake;
+            }
+          }
+          if (bestCost === Infinity) continue;
+          canFitCompact = !bestIsSnaking;
+          neighborOrientation = bestOrient;
+          rotationCost = bestCost;
+        } else {
+          canFitCompact = unitSize === 1 || GridUtils.canFormationFit(grid, gridType, neighbor.q, neighbor.r, unitSize);
+          if (!canFitCompact && !canSnake) continue;
         }
+        
+        const dq = neighbor.q - current.q, dr = neighbor.r - current.r;
+        let moveCost = GridUtils.getMovementCost(gridType, dq, dr, 1) + rotationCost;
+        let neighborIsCompact = canFitCompact;
+        
+        // For non-oblong multi-unit, handle snake costs here (oblong already handled above)
+        if (effectiveUnitSize > 1 && !isOblong) {
+          if (canFitCompact) {
+            moveCost += GridUtils.getFormationClearance(grid, gridType, neighbor.q, neighbor.r, unitSize);
+            if (!currentIsCompact) moveCost += snakePenalty * 0.3;
+          } else if (canSnake) {
+            neighborIsCompact = false;
+            moveCost += GridUtils.getScaledSnakePenalty(snakePenalty, effectiveUnitSize) * (currentIsCompact ? 1 : 0.15);
+          }
+        }
+        
         const newCost = currentCost + moveCost;
-        if (!costField.has(neighborKey) || newCost < costField.get(neighborKey)) { costField.set(neighborKey, newCost); formationState.set(neighborKey, neighborIsCompact); openSet.push(neighborKey, newCost); }
+        if (!costField.has(neighborKey) || newCost < costField.get(neighborKey)) {
+          costField.set(neighborKey, newCost);
+          formationState.set(neighborKey, neighborIsCompact);
+          orientationState.set(neighborKey, neighborOrientation);
+          openSet.push(neighborKey, newCost);
+        }
       }
     }
+    
+    // Build flow vectors pointing toward lowest cost neighbor
     for (const [key] of costField) {
       const current = GridUtils.parseKey(key);
       const currentCost = costField.get(key);
@@ -522,10 +1101,15 @@ const Algorithms = {
       for (const neighbor of GridUtils.getNeighbors(gridType, current.q, current.r)) {
         const neighborKey = GridUtils.cellKey(neighbor.q, neighbor.r);
         const neighborCost = costField.get(neighborKey);
-        if (neighborCost !== undefined && neighborCost < bestCost) { bestCost = neighborCost; bestNeighbor = neighbor; }
+        if (neighborCost !== undefined && neighborCost < bestCost) {
+          bestCost = neighborCost;
+          bestNeighbor = neighbor;
+        }
       }
       if (bestNeighbor) flowVectors.set(key, { direction: { q: bestNeighbor.q - current.q, r: bestNeighbor.r - current.r } });
     }
+    
+    // Trace path from start following flow vectors
     const path = [];
     let current = startKey;
     const pathVisited = new Set();
@@ -535,10 +1119,15 @@ const Algorithms = {
       if (!flow) break;
       const pos = GridUtils.parseKey(current);
       const nextKey = GridUtils.cellKey(pos.q + flow.direction.q, pos.r + flow.direction.r);
-      path.push({ key: nextKey, isCompact: formationState.get(nextKey) ?? true });
+      path.push({ 
+        key: nextKey, 
+        isCompact: formationState.get(nextKey) ?? true,
+        orientation: orientationState.get(nextKey) ?? 0
+      });
       current = nextKey;
     }
-    return { visited, path, costField, flowVectors, gScore: costField, formationState };
+    
+    return { visited, path, costField, flowVectors, gScore: costField, formationState, orientationState };
   },
 };
 
@@ -548,6 +1137,8 @@ function PathfindingVisualizer() {
   const [grid, setGrid] = useState(new Map());
   const [startNode, setStartNode] = useState({ q: -10, r: 0 });
   const [endNode, setEndNode] = useState({ q: 10, r: 0 });
+  const [startOrientation, setStartOrientation] = useState(0);
+  const [endOrientation, setEndOrientation] = useState(0);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('aStar');
   const [isRunning, setIsRunning] = useState(false);
   const [isDragging, setIsDragging] = useState(null);
@@ -557,11 +1148,13 @@ function PathfindingVisualizer() {
   const [unitSize, setUnitSize] = useState(1);
   const [canSnake, setCanSnake] = useState(false);
   const [snakePenalty, setSnakePenalty] = useState(1.5);
+  const [smoothPath, setSmoothPath] = useState(false);
   const [heuristicWeight, setHeuristicWeight] = useState(1);
   const [showCellNumbers, setShowCellNumbers] = useState(false);
   const [showCostOverlay, setShowCostOverlay] = useState(false);
   const [costField, setCostField] = useState(new Map());
   const [flowVectors, setFlowVectors] = useState(new Map());
+  const [smoothWaypoints, setSmoothWaypoints] = useState([]);
   const [showFlowVectors, setShowFlowVectors] = useState(true);
   const [hasVisualized, setHasVisualized] = useState(false);
   const [wallEditMode, setWallEditMode] = useState(null);
@@ -569,15 +1162,15 @@ function PathfindingVisualizer() {
   const algorithmDropdownRef = useRef(null);
   
   const algorithmInfo = {
-    dijkstra: { name: "Dijkstra's", optimal: true, complete: true, desc: "Explores uniformly by cost — guaranteed shortest path", icon: '🎯' },
-    aStar: { name: 'A* Search', optimal: 'w≤1', complete: true, desc: 'Cost + heuristic guided — optimal when weight ≤ 1', icon: '⭐' },
-    greedyBestFirst: { name: 'Greedy Best-First', optimal: false, complete: true, desc: 'Pure heuristic — very fast but often suboptimal', icon: '🏃' },
-    swarm: { name: 'Swarm', optimal: false, complete: true, desc: 'Dynamic weight decreases over iterations', icon: '🐝' },
-    convergentSwarm: { name: 'Convergent Swarm', optimal: false, complete: true, desc: 'Weight based on progress toward goal', icon: '🌀' },
-    bidirectionalSwarm: { name: 'Bidirectional Swarm', optimal: false, complete: true, desc: 'Searches from both start and end simultaneously', icon: '↔️' },
-    flowField: { name: 'Flow Field', optimal: true, complete: true, desc: 'Vector field pointing to goal — great for many units', icon: '🌊' },
-    bfs: { name: 'Breadth-First (BFS)', optimal: 'unweighted', complete: true, desc: 'Level-by-level — optimal for uniform cost', icon: '📊' },
-    dfs: { name: 'Depth-First (DFS)', optimal: false, complete: false, desc: 'Goes deep first — fast but unpredictable paths', icon: '🔍' },
+    dijkstra: { name: "Dijkstra's", optimal: true, complete: true, desc: "Explores uniformly by cost — guaranteed shortest path", icon: '🎯', supportsLineRotation: true },
+    aStar: { name: 'A* Search', optimal: true, complete: true, desc: 'Cost + heuristic guided — the gold standard', icon: '⭐', supportsLineRotation: true },
+    greedyBestFirst: { name: 'Greedy Best-First', optimal: false, complete: true, desc: 'Pure heuristic — very fast but often suboptimal', icon: '🏃', supportsLineRotation: false },
+    swarm: { name: 'Swarm', optimal: false, complete: true, desc: 'Dynamic weight decreases over iterations', icon: '🐝', supportsLineRotation: false },
+    convergentSwarm: { name: 'Convergent Swarm', optimal: false, complete: true, desc: 'Weight based on progress toward goal', icon: '🌀', supportsLineRotation: false },
+    bidirectionalSwarm: { name: 'Bidirectional Swarm', optimal: false, complete: true, desc: 'Searches from both start and end simultaneously', icon: '↔️', supportsLineRotation: false },
+    flowField: { name: 'Flow Field', optimal: true, complete: true, desc: 'Vector field pointing to goal — great for many units', icon: '🌊', supportsLineRotation: true },
+    bfs: { name: 'Breadth-First (BFS)', optimal: 'unweighted', complete: true, desc: 'Level-by-level — optimal for uniform cost', icon: '📊', supportsLineRotation: false },
+    dfs: { name: 'Depth-First (DFS)', optimal: false, complete: false, desc: 'Goes deep first — fast but unpredictable paths', icon: '🔍', supportsLineRotation: false },
   };
 
   useEffect(() => {
@@ -592,7 +1185,7 @@ function PathfindingVisualizer() {
 
   const svgRef = useRef(null);
   const animationRef = useRef([]);
-  const prevSettingsRef = useRef({ heuristicWeight, snakePenalty, canSnake, unitSize, selectedAlgorithm, gridType, heuristic });
+  const prevSettingsRef = useRef({ heuristicWeight, snakePenalty, canSnake, smoothPath, unitSize, selectedAlgorithm, gridType, heuristic, startOrientation, endOrientation });
 
   const CELL_SIZE = gridType === 'hex' ? 18 : 14;
   const SVG_WIDTH = 1200, SVG_HEIGHT = 800;
@@ -627,15 +1220,25 @@ function PathfindingVisualizer() {
     setStartNode(defaultStart); setEndNode(defaultEnd);
     setHasVisualized(false); setFlowVectors(new Map()); setCostField(new Map()); setStats({ visited: 0, pathLength: 0, time: 0 });
     if (!gridConfig.unitSizes.includes(unitSize)) setUnitSize(gridConfig.unitSizes[0]);
+    setStartOrientation(0); setEndOrientation(0); // Reset orientations
     setHeuristic(gridConfig.defaultHeuristic);
   }, [gridType, initializeGrid, gridConfig]);
+
+  // Clamp orientations when unit size changes
+  useEffect(() => {
+    if (GridUtils.isOblongUnit(unitSize)) {
+      const maxOrient = GridUtils.getNumOrientations(gridType, unitSize);
+      if (startOrientation >= maxOrient) setStartOrientation(0);
+      if (endOrientation >= maxOrient) setEndOrientation(0);
+    }
+  }, [unitSize, gridType, startOrientation, endOrientation]);
 
   const offsetX = SVG_WIDTH / 2, offsetY = SVG_HEIGHT / 2;
   const clearAnimations = useCallback(() => { animationRef.current.forEach(id => clearTimeout(id)); animationRef.current = []; }, []);
   const clearPath = useCallback(() => {
     clearAnimations();
     setGrid(prev => { const newGrid = new Map(prev); for (const [key, node] of newGrid) newGrid.set(key, { ...node, isVisited: false, isPath: false, animationState: 'none' }); return newGrid; });
-    setStats({ visited: 0, pathLength: 0, time: 0 }); setFlowVectors(new Map()); setCostField(new Map());
+    setStats({ visited: 0, pathLength: 0, time: 0 }); setFlowVectors(new Map()); setCostField(new Map()); setSmoothWaypoints([]);
   }, [clearAnimations]);
   const clearBoard = useCallback(() => {
     clearAnimations();
@@ -643,14 +1246,25 @@ function PathfindingVisualizer() {
     const defaultStart = gridType === 'hex' ? { q: -14, r: 0 } : { q: -16, r: 0 };
     const defaultEnd = gridType === 'hex' ? { q: 14, r: 0 } : { q: 16, r: 0 };
     setStartNode(defaultStart); setEndNode(defaultEnd);
-    setHasVisualized(false); setFlowVectors(new Map()); setCostField(new Map()); setStats({ visited: 0, pathLength: 0, time: 0 });
+    setHasVisualized(false); setFlowVectors(new Map()); setCostField(new Map()); setStats({ visited: 0, pathLength: 0, time: 0 }); setSmoothWaypoints([]);
   }, [clearAnimations, initializeGrid, gridType]);
 
-  const reconstructPath = (previous, endKey, startKey, formationState = null) => {
+  const reconstructPath = (previous, endKey, startKey, formationState = null, orientationState = null) => {
     const path = [];
     let current = endKey;
-    while (current && current !== startKey) { path.unshift({ key: current, isCompact: formationState ? (formationState.get(current) ?? true) : true }); current = previous.get(current); }
-    if (current === startKey) path.unshift({ key: startKey, isCompact: formationState ? (formationState.get(startKey) ?? true) : true });
+    while (current && current !== startKey) { 
+      path.unshift({ 
+        key: current, 
+        isCompact: formationState ? (formationState.get(current) ?? true) : true,
+        orientation: orientationState ? (orientationState.get(current) ?? 0) : 0
+      }); 
+      current = previous.get(current); 
+    }
+    if (current === startKey) path.unshift({ 
+      key: startKey, 
+      isCompact: formationState ? (formationState.get(startKey) ?? true) : true,
+      orientation: orientationState ? (orientationState.get(startKey) ?? 0) : 0
+    });
     return path;
   };
 
@@ -661,16 +1275,17 @@ function PathfindingVisualizer() {
       animationRef.current.push(timeout);
     });
     const pathStartTime = visited.length * visitDelay;
+    const effectiveUnitSize = GridUtils.isOblongUnit(currentUnitSize) ? GridUtils.getOblongSize(currentUnitSize) : currentUnitSize;
     path.forEach((pathNode, index) => {
       const timeout = setTimeout(() => {
         setGrid(prev => {
           const newGrid = new Map(prev);
-          const { key, isCompact } = pathNode;
+          const { key, isCompact, orientation = 0 } = pathNode;
           const { q, r } = GridUtils.parseKey(key);
-          const formationCells = GridUtils.getFormationCells(gridType, q, r, currentUnitSize);
+          const formationCells = GridUtils.getFormationCells(gridType, q, r, currentUnitSize, orientation);
           const centerNode = newGrid.get(key);
           if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(key, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
-          if (currentUnitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === key) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+          if (effectiveUnitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === key) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
           return newGrid;
         });
         if (index === path.length - 1) setIsRunning(false);
@@ -688,17 +1303,17 @@ function PathfindingVisualizer() {
     for (const [key, node] of grid) algorithmGrid.set(key, { ...node, isVisited: false });
     const startKey = GridUtils.cellKey(startNode.q, startNode.r);
     let result;
-    const runSelectedAlgorithm = (gridToUse, from, to) => {
+    const runSelectedAlgorithm = (gridToUse, from, to, initOrient = null) => {
       switch (selectedAlgorithm) {
-        case 'aStar': return Algorithms.aStar(gridToUse, from, to, heuristicWeight >= 10 ? 1000 : heuristicWeight, gridType, heuristic, unitSize, canSnake, snakePenalty);
-        case 'dijkstra': return Algorithms.dijkstra(gridToUse, from, to, gridType, unitSize, canSnake, snakePenalty);
+        case 'aStar': return Algorithms.aStar(gridToUse, from, to, heuristicWeight >= 10 ? 1000 : heuristicWeight, gridType, heuristic, unitSize, canSnake, snakePenalty, initOrient);
+        case 'dijkstra': return Algorithms.dijkstra(gridToUse, from, to, gridType, unitSize, canSnake, snakePenalty, initOrient);
         case 'greedyBestFirst': return Algorithms.greedyBestFirst(gridToUse, from, to, gridType, heuristic, unitSize, canSnake, snakePenalty);
         case 'bfs': return Algorithms.bfs(gridToUse, from, to, gridType, unitSize, canSnake);
         case 'dfs': return Algorithms.dfs(gridToUse, from, to, gridType, unitSize, canSnake);
         case 'swarm': return Algorithms.swarm(gridToUse, from, to, gridType, heuristic, unitSize, canSnake, snakePenalty);
         case 'convergentSwarm': return Algorithms.convergentSwarm(gridToUse, from, to, gridType, heuristic, unitSize, canSnake, snakePenalty);
         case 'flowField': return Algorithms.flowField(gridToUse, from, to, gridType, unitSize, canSnake, snakePenalty);
-        default: return Algorithms.aStar(gridToUse, from, to, 1, gridType, heuristic, unitSize, canSnake, snakePenalty);
+        default: return Algorithms.aStar(gridToUse, from, to, 1, gridType, heuristic, unitSize, canSnake, snakePenalty, initOrient);
       }
     };
     if (selectedAlgorithm === 'bidirectionalSwarm') {
@@ -714,25 +1329,33 @@ function PathfindingVisualizer() {
       }
       result = { visited: algoResult.visited, path, gScore: algoResult.gScore };
     } else {
-      const algoResult = runSelectedAlgorithm(algorithmGrid, startNode, endNode);
+      const algoResult = runSelectedAlgorithm(algorithmGrid, startNode, endNode, startOrientation);
       let path;
       if (selectedAlgorithm === 'flowField' && algoResult.path) { path = algoResult.path; setFlowVectors(algoResult.flowVectors || new Map()); }
-      else path = reconstructPath(algoResult.previous, algoResult.endKey, startKey, algoResult.formationState);
+      else path = reconstructPath(algoResult.previous, algoResult.endKey, startKey, algoResult.formationState, algoResult.orientationState);
       result = { visited: algoResult.visited, path, gScore: selectedAlgorithm === 'flowField' ? (algoResult.costField || new Map()) : (algoResult.gScore || new Map()) };
+    }
+    // Apply path smoothing if enabled
+    if (smoothPath && result.path.length > 2) {
+      const smoothResult = GridUtils.smoothPath(algorithmGrid, gridType, result.path, unitSize);
+      result.path = smoothResult.visualPath;
+      setSmoothWaypoints(smoothResult.waypoints);
+    } else {
+      setSmoothWaypoints([]);
     }
     if (selectedAlgorithm !== 'flowField') setFlowVectors(new Map());
     setCostField(result.gScore || new Map());
     setStats({ visited: result.visited.length, pathLength: result.path.length, time: Math.round(performance.now() - startTime) });
     animateAlgorithm(result.visited, result.path, unitSize);
     setHasVisualized(true);
-  }, [grid, startNode, endNode, selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, isRunning, clearPath, animateAlgorithm, gridType, heuristic]);
+  }, [grid, startNode, endNode, selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, smoothPath, isRunning, clearPath, animateAlgorithm, gridType, heuristic, startOrientation]);
 
   const runInstantRecalc = useCallback((gridState, newStart, newEnd) => {
     const algorithmGrid = new Map();
     for (const [k, n] of gridState) algorithmGrid.set(k, { ...n, isVisited: false });
     const sKey = GridUtils.cellKey(newStart.q, newStart.r);
     let path = [], gScore = new Map();
-    if (selectedAlgorithm === 'aStar') { const algoResult = Algorithms.aStar(algorithmGrid, newStart, newEnd, heuristicWeight >= 10 ? 1000 : heuristicWeight, gridType, heuristic, unitSize, canSnake, snakePenalty); path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); }); }
+    if (selectedAlgorithm === 'aStar') { const algoResult = Algorithms.aStar(algorithmGrid, newStart, newEnd, heuristicWeight >= 10 ? 1000 : heuristicWeight, gridType, heuristic, unitSize, canSnake, snakePenalty, startOrientation); path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState, algoResult.orientationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); }); }
     else if (selectedAlgorithm === 'flowField') { const algoResult = Algorithms.flowField(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake, snakePenalty); path = algoResult.path || []; gScore = algoResult.costField || new Map(); setTimeout(() => setFlowVectors(algoResult.flowVectors || new Map()), 0); }
     else if (selectedAlgorithm === 'bidirectionalSwarm') {
       const algoResult = Algorithms.bidirectionalSwarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty);
@@ -741,13 +1364,20 @@ function PathfindingVisualizer() {
       algoResult.visitedStart?.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); });
       algoResult.visitedEnd?.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); });
     }
-    else if (selectedAlgorithm === 'dijkstra') { const algoResult = Algorithms.dijkstra(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake, snakePenalty); path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); }); }
+    else if (selectedAlgorithm === 'dijkstra') { const algoResult = Algorithms.dijkstra(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake, snakePenalty, startOrientation); path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState, algoResult.orientationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); }); }
     else {
       const algoResult = selectedAlgorithm === 'greedyBestFirst' ? Algorithms.greedyBestFirst(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty) : selectedAlgorithm === 'bfs' ? Algorithms.bfs(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake) : selectedAlgorithm === 'dfs' ? Algorithms.dfs(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake) : selectedAlgorithm === 'swarm' ? Algorithms.swarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty) : Algorithms.convergentSwarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty);
       path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); });
     }
-    return { path, gScore, algorithmGrid };
-  }, [selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, gridType, heuristic]);
+    // Apply path smoothing if enabled
+    let waypoints = [];
+    if (smoothPath && path.length > 2) {
+      const smoothResult = GridUtils.smoothPath(algorithmGrid, gridType, path, unitSize);
+      path = smoothResult.visualPath;
+      waypoints = smoothResult.waypoints;
+    }
+    return { path, gScore, algorithmGrid, waypoints };
+  }, [selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, smoothPath, gridType, heuristic, startOrientation]);
 
   const handleCellInteraction = useCallback((q, r, isClick = false) => {
     if (isRunning) return;
@@ -759,7 +1389,29 @@ function PathfindingVisualizer() {
       if (node.isEnd) { setIsDragging('end'); return; }
       const shouldBeWall = !node.isWall;
       setIsDragging('wall'); setWallEditMode(shouldBeWall ? 'add' : 'remove');
-      setGrid(prev => { const newGrid = new Map(prev); newGrid.set(key, { ...node, isWall: shouldBeWall }); return newGrid; });
+      
+      // Update wall and recalculate path if visualized
+      const newGrid = new Map(grid);
+      newGrid.set(key, { ...node, isWall: shouldBeWall });
+      
+      if (hasVisualized) {
+        for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
+        const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, endNode);
+        setSmoothWaypoints(waypoints || []);
+        for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
+        for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
+        for (const pathNode of path) {
+          const { key: pKey, isCompact, orientation = 0 } = pathNode;
+          const { q: pq, r: pr } = GridUtils.parseKey(pKey);
+          const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize, orientation);
+          const centerNode = newGrid.get(pKey);
+          if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
+          if (GridUtils.isMultiUnit(unitSize)) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+        }
+        setCostField(gScore);
+        setStats(s => ({ ...s, pathLength: path.length }));
+      }
+      setGrid(newGrid);
       return;
     }
     if (isDragging === 'start' && !node.isEnd && !node.isWall) {
@@ -771,17 +1423,18 @@ function PathfindingVisualizer() {
       let newGScore = new Map();
       if (hasVisualized) {
         for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-        const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, newStart, endNode);
+        const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, newStart, endNode);
         newGScore = gScore;
+        setSmoothWaypoints(waypoints || []);
         for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const pathNode of path) {
-          const { key: pKey, isCompact } = pathNode;
+          const { key: pKey, isCompact, orientation = 0 } = pathNode;
           const { q: pq, r: pr } = GridUtils.parseKey(pKey);
-          const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize);
+          const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize, orientation);
           const centerNode = newGrid.get(pKey);
           if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
-          if (unitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+          if (GridUtils.isMultiUnit(unitSize)) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
         }
         setStats(s => ({ ...s, pathLength: path.length }));
       }
@@ -798,17 +1451,18 @@ function PathfindingVisualizer() {
       let newGScore = new Map();
       if (hasVisualized) {
         for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-        const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, newEnd);
+        const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, newEnd);
         newGScore = gScore;
+        setSmoothWaypoints(waypoints || []);
         for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const pathNode of path) {
-          const { key: pKey, isCompact } = pathNode;
+          const { key: pKey, isCompact, orientation = 0 } = pathNode;
           const { q: pq, r: pr } = GridUtils.parseKey(pKey);
-          const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize);
+          const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize, orientation);
           const centerNode = newGrid.get(pKey);
           if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
-          if (unitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+          if (GridUtils.isMultiUnit(unitSize)) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
         }
         setStats(s => ({ ...s, pathLength: path.length }));
       }
@@ -818,35 +1472,59 @@ function PathfindingVisualizer() {
     }
     if (!node.isStart && !node.isEnd && isDragging === 'wall') {
       const shouldBeWall = wallEditMode === 'add';
-      if (node.isWall !== shouldBeWall) setGrid(prev => { const newGrid = new Map(prev); newGrid.set(key, { ...node, isWall: shouldBeWall }); return newGrid; });
+      if (node.isWall !== shouldBeWall) {
+        // Update the wall
+        const newGrid = new Map(grid);
+        newGrid.set(key, { ...node, isWall: shouldBeWall });
+        
+        // Recalculate path if we have a visualization
+        if (hasVisualized) {
+          for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
+          const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, endNode);
+          setSmoothWaypoints(waypoints || []);
+          for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
+          for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
+          for (const pathNode of path) {
+            const { key: pKey, isCompact, orientation = 0 } = pathNode;
+            const { q: pq, r: pr } = GridUtils.parseKey(pKey);
+            const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize, orientation);
+            const centerNode = newGrid.get(pKey);
+            if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
+            if (GridUtils.isMultiUnit(unitSize)) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+          }
+          setCostField(gScore);
+          setStats(s => ({ ...s, pathLength: path.length }));
+        }
+        setGrid(newGrid);
+      }
     }
   }, [grid, isRunning, isDragging, startNode, endNode, hasVisualized, unitSize, runInstantRecalc, wallEditMode, gridType]);
 
   useEffect(() => {
     const prev = prevSettingsRef.current;
-    const settingsChanged = prev.heuristicWeight !== heuristicWeight || prev.snakePenalty !== snakePenalty || prev.canSnake !== canSnake || prev.unitSize !== unitSize || prev.selectedAlgorithm !== selectedAlgorithm || prev.gridType !== gridType || prev.heuristic !== heuristic;
-    prevSettingsRef.current = { heuristicWeight, snakePenalty, canSnake, unitSize, selectedAlgorithm, gridType, heuristic };
+    const settingsChanged = prev.heuristicWeight !== heuristicWeight || prev.snakePenalty !== snakePenalty || prev.canSnake !== canSnake || prev.smoothPath !== smoothPath || prev.unitSize !== unitSize || prev.selectedAlgorithm !== selectedAlgorithm || prev.gridType !== gridType || prev.heuristic !== heuristic || prev.startOrientation !== startOrientation || prev.endOrientation !== endOrientation;
+    prevSettingsRef.current = { heuristicWeight, snakePenalty, canSnake, smoothPath, unitSize, selectedAlgorithm, gridType, heuristic, startOrientation, endOrientation };
     if (!settingsChanged || !hasVisualized || isRunning) return;
-    let computedGScore = new Map(), computedPathLength = 0;
+    let computedGScore = new Map(), computedPathLength = 0, computedWaypoints = [];
     setGrid(currentGrid => {
       const newGrid = new Map(currentGrid);
       for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-      const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, endNode);
-      computedGScore = gScore; computedPathLength = path.length;
+      const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, endNode);
+      computedGScore = gScore; computedPathLength = path.length; computedWaypoints = waypoints || [];
       for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
       for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
       for (const pathNode of path) {
-        const { key: pKey, isCompact } = pathNode;
+        const { key: pKey, isCompact, orientation = 0 } = pathNode;
         const { q: pq, r: pr } = GridUtils.parseKey(pKey);
-        const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize);
+        const formationCells = GridUtils.getFormationCells(gridType, pq, pr, unitSize, orientation);
         const centerNode = newGrid.get(pKey);
         if (centerNode && !centerNode.isStart && !centerNode.isEnd) newGrid.set(pKey, { ...centerNode, animationState: isCompact ? 'path' : 'pathSnaking', isPath: true });
-        if (unitSize > 1) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
+        if (GridUtils.isMultiUnit(unitSize)) formationCells.forEach(cell => { const cellKey = GridUtils.cellKey(cell.q, cell.r); if (cellKey === pKey) return; const cellNode = newGrid.get(cellKey); if (cellNode && !cellNode.isStart && !cellNode.isEnd && !cellNode.isWall) newGrid.set(cellKey, { ...cellNode, animationState: isCompact ? 'pathFormation' : 'pathSnakingFormation', isPath: true }); });
       }
       return newGrid;
     });
-    setCostField(computedGScore); setStats(s => ({ ...s, pathLength: computedPathLength }));
-  }, [heuristicWeight, snakePenalty, canSnake, unitSize, selectedAlgorithm, hasVisualized, isRunning, startNode, endNode, runInstantRecalc, gridType, heuristic]);
+    setCostField(computedGScore); setStats(s => ({ ...s, pathLength: computedPathLength })); setSmoothWaypoints(computedWaypoints);
+  }, [heuristicWeight, snakePenalty, canSnake, smoothPath, unitSize, selectedAlgorithm, hasVisualized, isRunning, startNode, endNode, runInstantRecalc, gridType, heuristic, startOrientation, endOrientation]);
 
   const handleMouseDown = (q, r) => handleCellInteraction(q, r, true);
   const handleMouseEnter = (q, r) => { setHoveredHex({ q, r }); if (isDragging) handleCellInteraction(q, r, false); };
@@ -888,8 +1566,22 @@ function PathfindingVisualizer() {
 
   const handleTouchEnd = useCallback(() => { setIsDragging(null); setWallEditMode(null); }, []);
   const generateMaze = useCallback(() => { clearPath(); setHasVisualized(false); setGrid(prev => { const newGrid = new Map(prev); for (const [key, node] of newGrid) if (!node.isStart && !node.isEnd) newGrid.set(key, { ...node, isWall: Math.random() < 0.3 }); return newGrid; }); }, [clearPath]);
-  const isInStartFormation = useCallback((q, r) => { if (unitSize === 1) return q === startNode.q && r === startNode.r; return GridUtils.getFormationCells(gridType, startNode.q, startNode.r, unitSize).some(c => c.q === q && c.r === r); }, [startNode, unitSize, gridType]);
-  const isInEndFormation = useCallback((q, r) => { if (unitSize === 1) return q === endNode.q && r === endNode.r; return GridUtils.getFormationCells(gridType, endNode.q, endNode.r, unitSize).some(c => c.q === q && c.r === r); }, [endNode, unitSize, gridType]);
+  const isInStartFormation = useCallback((q, r) => { 
+    const effectiveSize = GridUtils.isOblongUnit(unitSize) ? GridUtils.getOblongSize(unitSize) : unitSize;
+    if (effectiveSize === 1) return q === startNode.q && r === startNode.r;
+    if (GridUtils.isOblongUnit(unitSize)) {
+      return GridUtils.getOblongCells(gridType, startNode.q, startNode.r, unitSize, startOrientation).some(c => c.q === q && c.r === r);
+    }
+    return GridUtils.getFormationCells(gridType, startNode.q, startNode.r, unitSize, 0).some(c => c.q === q && c.r === r); 
+  }, [startNode, unitSize, gridType, startOrientation]);
+  const isInEndFormation = useCallback((q, r) => { 
+    const effectiveSize = GridUtils.isOblongUnit(unitSize) ? GridUtils.getOblongSize(unitSize) : unitSize;
+    if (effectiveSize === 1) return q === endNode.q && r === endNode.r;
+    if (GridUtils.isOblongUnit(unitSize)) {
+      return GridUtils.getOblongCells(gridType, endNode.q, endNode.r, unitSize, endOrientation).some(c => c.q === q && c.r === r);
+    }
+    return GridUtils.getFormationCells(gridType, endNode.q, endNode.r, unitSize, 0).some(c => c.q === q && c.r === r); 
+  }, [endNode, unitSize, gridType, endOrientation]);
   const getCellFill = (node) => { const inStart = isInStartFormation(node.q, node.r), inEnd = isInEndFormation(node.q, node.r); if (inStart) return '#0077BB'; if (inEnd) return '#EE7733'; if (node.isWall) return '#0d0d1a'; switch (node.animationState) { case 'visited': return '#88CCEE'; case 'path': case 'pathFormation': return '#FFDD44'; case 'pathSnaking': case 'pathSnakingFormation': return '#FFFFFF'; default: break; } return '#1a1a2e'; };
   const getCellStroke = (node, isHovered) => { if (isHovered) return '#fff'; const inStart = isInStartFormation(node.q, node.r), inEnd = isInEndFormation(node.q, node.r); if (inStart) return '#0077BB'; if (inEnd) return '#EE7733'; if (node.isWall) return '#333'; return '#0f3460'; };
   const getFlowArrow = (q, r, direction) => { const { x, y } = GridUtils.cellToPixel(gridType, q, r, CELL_SIZE); const cx = x + offsetX, cy = y + offsetY; const targetPixel = GridUtils.cellToPixel(gridType, q + direction.q, r + direction.r, CELL_SIZE); const angle = Math.atan2(targetPixel.y - y, targetPixel.x - x); const arrowLength = CELL_SIZE * 0.5, arrowHeadSize = CELL_SIZE * 0.2; const startX = cx - Math.cos(angle) * (arrowLength * 0.3), startY = cy - Math.sin(angle) * (arrowLength * 0.3); const tipX = cx + Math.cos(angle) * arrowLength * 0.7, tipY = cy + Math.sin(angle) * arrowLength * 0.7; const headAngle1 = angle + Math.PI * 0.75, headAngle2 = angle - Math.PI * 0.75; return { line: { x1: startX, y1: startY, x2: tipX, y2: tipY }, head: `${tipX},${tipY} ${tipX + Math.cos(headAngle1) * arrowHeadSize},${tipY + Math.sin(headAngle1) * arrowHeadSize} ${tipX + Math.cos(headAngle2) * arrowHeadSize},${tipY + Math.sin(headAngle2) * arrowHeadSize}` }; };
@@ -914,7 +1606,7 @@ function PathfindingVisualizer() {
       const corners = GridUtils.hexCorners(cx, cy, CELL_SIZE - 1);
       return (
         <g key={cellKey}>
-          <polygon points={corners.map(c => `${c.x},${c.y}`).join(' ')} fill={getCellFill(node)} stroke={getCellStroke(node, isHovered)} strokeWidth={isHovered ? 2 : (inStart || inEnd) && unitSize > 1 ? 2 : 1} onMouseDown={() => handleMouseDown(node.q, node.r)} onMouseEnter={() => handleMouseEnter(node.q, node.r)} style={{ cursor: 'pointer' }} />
+          <polygon points={corners.map(c => `${c.x},${c.y}`).join(' ')} fill={getCellFill(node)} stroke={getCellStroke(node, isHovered)} strokeWidth={isHovered ? 2 : (inStart || inEnd) && GridUtils.isMultiUnit(unitSize) ? 2 : 1} onMouseDown={() => handleMouseDown(node.q, node.r)} onMouseEnter={() => handleMouseEnter(node.q, node.r)} style={{ cursor: 'pointer' }} />
           {isPrimaryStart && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="14" fontWeight="bold" pointerEvents="none">▶</text>}
           {isPrimaryEnd && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="14" fontWeight="bold" pointerEvents="none">◎</text>}
           {showCellNumbers && <text x={cx} y={cy + (isPrimaryStart || isPrimaryEnd ? 8 : 0)} textAnchor="middle" dominantBaseline="central" fill="#666" fontSize="7" pointerEvents="none">{node.q},{node.r}</text>}
@@ -926,7 +1618,7 @@ function PathfindingVisualizer() {
       const halfSize = CELL_SIZE - 1;
       return (
         <g key={cellKey}>
-          <rect x={cx - halfSize} y={cy - halfSize} width={halfSize * 2} height={halfSize * 2} fill={getCellFill(node)} stroke={getCellStroke(node, isHovered)} strokeWidth={isHovered ? 2 : (inStart || inEnd) && unitSize > 1 ? 2 : 1} onMouseDown={() => handleMouseDown(node.q, node.r)} onMouseEnter={() => handleMouseEnter(node.q, node.r)} style={{ cursor: 'pointer' }} />
+          <rect x={cx - halfSize} y={cy - halfSize} width={halfSize * 2} height={halfSize * 2} fill={getCellFill(node)} stroke={getCellStroke(node, isHovered)} strokeWidth={isHovered ? 2 : (inStart || inEnd) && GridUtils.isMultiUnit(unitSize) ? 2 : 1} onMouseDown={() => handleMouseDown(node.q, node.r)} onMouseEnter={() => handleMouseEnter(node.q, node.r)} style={{ cursor: 'pointer' }} />
           {isPrimaryStart && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="12" fontWeight="bold" pointerEvents="none">▶</text>}
           {isPrimaryEnd && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="12" fontWeight="bold" pointerEvents="none">◎</text>}
           {showCellNumbers && <text x={cx} y={cy + (isPrimaryStart || isPrimaryEnd ? 6 : 0)} textAnchor="middle" dominantBaseline="central" fill="#666" fontSize="6" pointerEvents="none">{node.q},{node.r}</text>}
@@ -991,8 +1683,30 @@ function PathfindingVisualizer() {
         <button onClick={generateMaze} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Random Walls</button>
         <div style={{ width: '1px', height: '24px', background: '#0f3460' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(170, 68, 153, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #AA4499' }}><span style={{ fontSize: '12px', color: '#AA4499' }}>Unit:</span>{gridConfig.unitSizes.map(size => <button key={size} onClick={() => setUnitSize(size)} disabled={isRunning} style={{ background: unitSize === size ? '#AA4499' : '#16213e', color: '#e8e8e8', border: `1px solid ${unitSize === size ? '#AA4499' : '#0f3460'}`, borderRadius: '4px', padding: '4px 8px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '11px', fontWeight: unitSize === size ? 'bold' : 'normal' }}>{gridConfig.unitLabels[size]}</button>)}</div>
-        <div style={{ width: '100px', display: 'flex', justifyContent: 'center' }}>{unitSize > 1 ? <button onClick={() => setCanSnake(!canSnake)} disabled={isRunning} style={{ background: canSnake ? '#DDAA00' : '#16213e', color: canSnake ? '#000' : '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: canSnake ? 'bold' : 'normal', width: '100%' }}>{canSnake ? '🐍 Snake ✓' : '🐍 Snake'}</button> : <span style={{ color: '#455a64', fontSize: '11px' }}>(1-unit)</span>}</div>
-        {unitSize > 1 && canSnake && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(221, 170, 0, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #DDAA00' }}><span style={{ fontSize: '11px', color: '#DDAA00' }}>Cost:</span><input type="range" min="0" max="10" step="0.5" value={snakePenalty} onChange={(e) => setSnakePenalty(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '60px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#DDAA00' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: '#DDAA00' }}>{snakePenalty.toFixed(1)}</span></div>}
+        {GridUtils.isOblongUnit(unitSize) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0, 119, 187, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #0077BB' }}>
+            <span style={{ fontSize: '11px', color: '#0077BB' }}>Start:</span>
+            <button onClick={() => setStartOrientation((startOrientation + GridUtils.getNumOrientations(gridType, unitSize) - 1) % GridUtils.getNumOrientations(gridType, unitSize))} disabled={isRunning} style={{ background: '#16213e', color: '#0077BB', border: '1px solid #0077BB', borderRadius: '4px', padding: '2px 6px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '11px' }}>↺</button>
+            <span style={{ fontSize: '10px', color: '#0077BB', minWidth: '20px', textAlign: 'center' }}>{startOrientation + 1}/{GridUtils.getNumOrientations(gridType, unitSize)}</span>
+            <button onClick={() => setStartOrientation((startOrientation + 1) % GridUtils.getNumOrientations(gridType, unitSize))} disabled={isRunning} style={{ background: '#16213e', color: '#0077BB', border: '1px solid #0077BB', borderRadius: '4px', padding: '2px 6px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '11px' }}>↻</button>
+          </div>
+        )}
+        {GridUtils.isOblongUnit(unitSize) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(238, 119, 51, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #EE7733' }}>
+            <span style={{ fontSize: '11px', color: '#EE7733' }}>End:</span>
+            <button onClick={() => setEndOrientation((endOrientation + GridUtils.getNumOrientations(gridType, unitSize) - 1) % GridUtils.getNumOrientations(gridType, unitSize))} disabled={isRunning} style={{ background: '#16213e', color: '#EE7733', border: '1px solid #EE7733', borderRadius: '4px', padding: '2px 6px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '11px' }}>↺</button>
+            <span style={{ fontSize: '10px', color: '#EE7733', minWidth: '20px', textAlign: 'center' }}>{endOrientation + 1}/{GridUtils.getNumOrientations(gridType, unitSize)}</span>
+            <button onClick={() => setEndOrientation((endOrientation + 1) % GridUtils.getNumOrientations(gridType, unitSize))} disabled={isRunning} style={{ background: '#16213e', color: '#EE7733', border: '1px solid #EE7733', borderRadius: '4px', padding: '2px 6px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '11px' }}>↻</button>
+          </div>
+        )}
+        {GridUtils.isOblongUnit(unitSize) && !['aStar', 'dijkstra', 'flowField'].includes(selectedAlgorithm) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255, 152, 0, 0.2)', padding: '4px 8px', borderRadius: '4px', border: '1px solid #ff9800' }}>
+            <span style={{ fontSize: '10px', color: '#ff9800' }}>⚠ {selectedAlgorithm === 'greedyBestFirst' ? 'Greedy' : selectedAlgorithm === 'bfs' ? 'BFS' : selectedAlgorithm === 'dfs' ? 'DFS' : selectedAlgorithm.replace('Swarm', '')} ignores rotation</span>
+          </div>
+        )}
+        <div style={{ width: '100px', display: 'flex', justifyContent: 'center' }}>{GridUtils.isMultiUnit(unitSize) ? <button onClick={() => setCanSnake(!canSnake)} disabled={isRunning} style={{ background: canSnake ? '#DDAA00' : '#16213e', color: canSnake ? '#000' : '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: canSnake ? 'bold' : 'normal', width: '100%' }}>{canSnake ? '🐍 Snake ✓' : '🐍 Snake'}</button> : <span style={{ color: '#455a64', fontSize: '11px' }}>(1-unit)</span>}</div>
+        {GridUtils.isMultiUnit(unitSize) && canSnake && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(221, 170, 0, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #DDAA00' }}><span style={{ fontSize: '11px', color: '#DDAA00' }}>Cost:</span><input type="range" min="0" max="10" step="0.5" value={snakePenalty} onChange={(e) => setSnakePenalty(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '60px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#DDAA00' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: '#DDAA00' }}>{snakePenalty.toFixed(1)}</span></div>}
+        <button onClick={() => setSmoothPath(!smoothPath)} disabled={isRunning} style={{ background: smoothPath ? '#9c27b0' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: smoothPath ? 'bold' : 'normal' }}>{smoothPath ? '〰️ Smooth ✓' : '〰️ Smooth'}</button>
         <div style={{ width: '1px', height: '24px', background: '#0f3460' }} />
         <button onClick={() => setShowCellNumbers(!showCellNumbers)} style={{ background: showCellNumbers ? '#2196f3' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showCellNumbers ? '🔢 Coords ✓' : '🔢 Coords'}</button>
         <button onClick={() => { setShowCostOverlay(!showCostOverlay); if (!showCostOverlay && selectedAlgorithm === 'flowField') setShowFlowVectors(false); }} style={{ background: showCostOverlay ? '#e91e63' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showCostOverlay ? '💰 Costs ✓' : '💰 Costs'}</button>
@@ -1002,7 +1716,240 @@ function PathfindingVisualizer() {
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#0077BB', borderRadius: 2 }}></span> Start</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#EE7733', borderRadius: 2 }}></span> Target</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#0d0d1a', borderRadius: 2, border: '1px solid #333' }}></span> Wall</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#88CCEE', borderRadius: 2 }}></span> Visited</span><span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: 14, height: 14, background: '#FFDD44', borderRadius: 2 }}></span> Path</span></div>
         <div style={{ display: 'flex', gap: '16px' }}><span>Visited: <strong style={{ color: '#88CCEE' }}>{stats.visited}</strong></span><span>Path: <strong style={{ color: '#FFDD44' }}>{stats.pathLength}</strong></span><span>Time: <strong style={{ color: '#ffc107' }}>{stats.time}ms</strong></span></div>
       </div>
-      <div className="grid-container" style={{ display: 'flex', justifyContent: 'center', padding: '10px', background: '#0a0a1a', userSelect: 'none', overflow: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}><svg ref={svgRef} width={SVG_WIDTH} height={SVG_HEIGHT} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} style={{ background: '#0d0d1a', borderRadius: '8px', userSelect: 'none', flexShrink: 0, touchAction: isDragging ? 'none' : 'pan-x pan-y' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onDragStart={(e) => e.preventDefault()}>{Array.from(grid.values()).map(node => renderCell(node))}</svg></div>
+      <div className="grid-container" style={{ display: 'flex', justifyContent: 'center', padding: '10px', background: '#0a0a1a', userSelect: 'none', overflow: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}><svg ref={svgRef} width={SVG_WIDTH} height={SVG_HEIGHT} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} style={{ background: '#0d0d1a', borderRadius: '8px', userSelect: 'none', flexShrink: 0, touchAction: isDragging ? 'none' : 'pan-x pan-y' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onDragStart={(e) => e.preventDefault()}>
+        {Array.from(grid.values()).map(node => renderCell(node))}
+        {/* Smooth path line overlay */}
+        {smoothPath && smoothWaypoints.length > 1 && (() => {
+          // Convert waypoints to pixel coordinates with pathfinding data
+          const waypoints = smoothWaypoints.map(wp => {
+            const pos = GridUtils.parseKey(wp.key);
+            const pixel = GridUtils.cellToPixel(gridType, pos.q, pos.r, CELL_SIZE);
+            return { 
+              x: pixel.x + offsetX, 
+              y: pixel.y + offsetY,
+              orientation: wp.orientation || 0,
+              isCompact: wp.isCompact !== false
+            };
+          });
+          
+          // Helper to check if a pixel position is inside a wall
+          const isPixelInWall = (px, py) => {
+            const localX = px - offsetX;
+            const localY = py - offsetY;
+            let cell;
+            if (gridType === 'hex') {
+              cell = GridUtils.axialRound(
+                (Math.sqrt(3)/3 * localX - 1/3 * localY) / CELL_SIZE,
+                (2/3 * localY) / CELL_SIZE
+              );
+            } else {
+              cell = { q: Math.round(localX / (CELL_SIZE * 2)), r: Math.round(localY / (CELL_SIZE * 2)) };
+            }
+            const key = GridUtils.cellKey(cell.q, cell.r);
+            const node = grid.get(key);
+            return !node || node.isWall;
+          };
+          
+          // Find safe offset distance (binary search)
+          const findSafeOffset = (cx, cy, nx, ny, maxOffset) => {
+            if (maxOffset <= 0) return 0;
+            if (!isPixelInWall(cx + nx * maxOffset, cy + ny * maxOffset)) {
+              return maxOffset;
+            }
+            let lo = 0, hi = maxOffset;
+            for (let i = 0; i < 8; i++) {
+              const mid = (lo + hi) / 2;
+              if (isPixelInWall(cx + nx * mid, cy + ny * mid)) {
+                hi = mid;
+              } else {
+                lo = mid;
+              }
+            }
+            return Math.max(0, lo - 2);
+          };
+          
+          // Check if three points are roughly collinear (straight line)
+          const isCollinear = (p0, p1, p2, threshold = 0.15) => {
+            const v1x = p1.x - p0.x, v1y = p1.y - p0.y;
+            const v2x = p2.x - p1.x, v2y = p2.y - p1.y;
+            const len1 = Math.sqrt(v1x * v1x + v1y * v1y) || 1;
+            const len2 = Math.sqrt(v2x * v2x + v2y * v2y) || 1;
+            // Cross product gives sin of angle between vectors
+            const cross = (v1x / len1) * (v2y / len2) - (v1y / len1) * (v2x / len2);
+            return Math.abs(cross) < threshold;
+          };
+          
+          // Generate path samples - straight lines with curves only at actual turns
+          const generatePathSamples = (pts) => {
+            if (pts.length < 2) return pts;
+            if (pts.length === 2) {
+              // Simple linear interpolation
+              const samples = [];
+              const numSamples = 20;
+              for (let i = 0; i <= numSamples; i++) {
+                const t = i / numSamples;
+                samples.push({
+                  x: pts[0].x + (pts[1].x - pts[0].x) * t,
+                  y: pts[0].y + (pts[1].y - pts[0].y) * t,
+                  orientation: Math.round(pts[0].orientation + (pts[1].orientation - pts[0].orientation) * t),
+                  isCompact: pts[0].isCompact && pts[1].isCompact
+                });
+              }
+              return samples;
+            }
+            
+            const samples = [];
+            
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p1 = pts[i];
+              const p2 = pts[i + 1];
+              const p0 = pts[Math.max(0, i - 1)];
+              const p3 = pts[Math.min(pts.length - 1, i + 2)];
+              
+              // Check if this segment should be curved (has actual turns at endpoints)
+              const hasTurnAtStart = i > 0 && !isCollinear(p0, p1, p2);
+              const hasTurnAtEnd = i < pts.length - 2 && !isCollinear(p1, p2, p3);
+              
+              const samplesInSegment = 20;
+              
+              for (let j = 0; j < samplesInSegment; j++) {
+                const t = j / samplesInSegment;
+                let x, y;
+                
+                if (!hasTurnAtStart && !hasTurnAtEnd) {
+                  // Straight segment - use linear interpolation
+                  x = p1.x + (p2.x - p1.x) * t;
+                  y = p1.y + (p2.y - p1.y) * t;
+                } else {
+                  // Curved segment - use bezier with minimal tension
+                  const tension = 0.2;
+                  
+                  const cp1x = p1.x + (hasTurnAtStart ? (p2.x - p0.x) * tension : (p2.x - p1.x) * 0.1);
+                  const cp1y = p1.y + (hasTurnAtStart ? (p2.y - p0.y) * tension : (p2.y - p1.y) * 0.1);
+                  const cp2x = p2.x - (hasTurnAtEnd ? (p3.x - p1.x) * tension : (p2.x - p1.x) * 0.1);
+                  const cp2y = p2.y - (hasTurnAtEnd ? (p3.y - p1.y) * tension : (p2.y - p1.y) * 0.1);
+                  
+                  const t2 = t * t, t3 = t2 * t;
+                  const mt = 1 - t, mt2 = mt * mt, mt3 = mt2 * mt;
+                  
+                  x = mt3 * p1.x + 3 * mt2 * t * cp1x + 3 * mt * t2 * cp2x + t3 * p2.x;
+                  y = mt3 * p1.y + 3 * mt2 * t * cp1y + 3 * mt * t2 * cp2y + t3 * p2.y;
+                }
+                
+                samples.push({
+                  x, y,
+                  orientation: Math.round(p1.orientation + (p2.orientation - p1.orientation) * t),
+                  isCompact: p1.isCompact && p2.isCompact
+                });
+              }
+            }
+            
+            // Add final point
+            const lastPt = pts[pts.length - 1];
+            samples.push({ x: lastPt.x, y: lastPt.y, orientation: lastPt.orientation, isCompact: lastPt.isCompact });
+            return samples;
+          };
+          
+          // Generate ribbon with width based on formation and travel direction
+          const generateRibbon = (samples) => {
+            if (samples.length < 2) return { left: [], right: [], center: samples };
+            
+            const left = [];
+            const right = [];
+            
+            for (let i = 0; i < samples.length; i++) {
+              const pt = samples[i];
+              
+              // Calculate tangent/travel direction
+              let dx, dy;
+              if (i === 0) {
+                dx = samples[1].x - samples[0].x;
+                dy = samples[1].y - samples[0].y;
+              } else if (i === samples.length - 1) {
+                dx = samples[i].x - samples[i - 1].x;
+                dy = samples[i].y - samples[i - 1].y;
+              } else {
+                dx = samples[i + 1].x - samples[i - 1].x;
+                dy = samples[i + 1].y - samples[i - 1].y;
+              }
+              
+              const travelAngle = Math.atan2(dy, dx);
+              
+              // Get formation width perpendicular to travel direction
+              const halfWidth = GridUtils.getFormationWidthForDirection(
+                gridType, unitSize, pt.orientation, travelAngle, CELL_SIZE
+              ) / 2;
+              
+              // Perpendicular direction
+              const len = Math.sqrt(dx * dx + dy * dy) || 1;
+              const nx = -dy / len;
+              const ny = dx / len;
+              
+              // Find safe offsets (wall-constrained)
+              const leftOffset = findSafeOffset(pt.x, pt.y, nx, ny, halfWidth);
+              const rightOffset = findSafeOffset(pt.x, pt.y, -nx, -ny, halfWidth);
+              
+              left.push({ x: pt.x + nx * leftOffset, y: pt.y + ny * leftOffset });
+              right.push({ x: pt.x - nx * rightOffset, y: pt.y - ny * rightOffset });
+            }
+            
+            return { left, right, center: samples };
+          };
+          
+          const pathSamples = generatePathSamples(waypoints);
+          const ribbon = generateRibbon(pathSamples);
+          
+          // Create SVG paths
+          const ribbonPath = `M ${ribbon.left[0].x},${ribbon.left[0].y} ` +
+            ribbon.left.slice(1).map(p => `L ${p.x},${p.y}`).join(' ') +
+            ` L ${ribbon.right[ribbon.right.length - 1].x},${ribbon.right[ribbon.right.length - 1].y} ` +
+            ribbon.right.slice(0, -1).reverse().map(p => `L ${p.x},${p.y}`).join(' ') +
+            ' Z';
+          
+          const centerPath = `M ${ribbon.center[0].x},${ribbon.center[0].y} ` +
+            ribbon.center.slice(1).map(p => `L ${p.x},${p.y}`).join(' ');
+          
+          return (
+            <g>
+              <defs>
+                <linearGradient id="ribbonGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#FFDD44" stopOpacity="0.4" />
+                  <stop offset="50%" stopColor="#FFEE88" stopOpacity="0.5" />
+                  <stop offset="100%" stopColor="#FFDD44" stopOpacity="0.4" />
+                </linearGradient>
+              </defs>
+              {/* Ribbon fill */}
+              <path d={ribbonPath} fill="url(#ribbonGradient)" stroke="none" />
+              {/* Ribbon edges */}
+              <path
+                d={`M ${ribbon.left[0].x},${ribbon.left[0].y} ` + ribbon.left.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')}
+                fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" opacity="0.6"
+              />
+              <path
+                d={`M ${ribbon.right[0].x},${ribbon.right[0].y} ` + ribbon.right.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')}
+                fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" opacity="0.6"
+              />
+              {/* Center line */}
+              <path d={centerPath} fill="none" stroke="#000" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+              <path d={centerPath} fill="none" stroke="#FFDD44" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="1" />
+              {/* Waypoint markers */}
+              {waypoints.map((pt, idx) => {
+                const isEndpoint = idx === 0 || idx === waypoints.length - 1;
+                return (
+                  <g key={`waypoint-${idx}`}>
+                    <circle cx={pt.x} cy={pt.y} r={isEndpoint ? 10 : 8} fill="#000" opacity="0.8" />
+                    <circle
+                      cx={pt.x} cy={pt.y} r={isEndpoint ? 7 : 5}
+                      fill={isEndpoint ? (idx === 0 ? '#0077BB' : '#EE7733') : (pt.isCompact ? '#FFDD44' : '#CC66FF')}
+                      stroke="#fff" strokeWidth="2"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })()}
+      </svg></div>
       
       {/* Formula Display */}
       <div style={{ background: 'linear-gradient(180deg, #0d1520, #0a0a1a)', padding: '20px', borderTop: '1px solid #0f3460' }}>
@@ -1163,21 +2110,22 @@ function PathfindingVisualizer() {
             </div>
 
             {/* Formation/Snake Info - only show if unit size > 1 */}
-            {unitSize > 1 && (
+            {GridUtils.isMultiUnit(unitSize) && (
               <div style={{ background: 'rgba(221, 170, 0, 0.1)', borderRadius: '8px', padding: '16px', border: '1px solid #DDAA00' }}>
                 <h4 style={{ color: '#ffeb3b', marginBottom: '12px', fontSize: '14px' }}>Formation: {gridConfig.unitLabels[unitSize]}</h4>
                 <div style={{ fontFamily: 'monospace', fontSize: '15px', color: '#fff', marginBottom: '12px', padding: '10px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
                   clearance_cost = blocked_neighbors × 0.1
-                  {canSnake && <><br/>snake_cost = {snakePenalty.toFixed(1)} (first) | {(snakePenalty * 0.15).toFixed(2)} (cont.)</>}
+                  {canSnake && <><br/>snake_cost = {(snakePenalty * Math.sqrt(unitSize)).toFixed(2)} × (first:1 | cont:0.15)</>}
                 </div>
                 <div style={{ fontSize: '12px', color: '#b0bec5', lineHeight: '1.6' }}>
                   <div><strong style={{ color: '#DDAA00' }}>Formation cells:</strong> {unitSize} cells move together</div>
                   <div><strong style={{ color: '#DDAA00' }}>Clearance penalty:</strong> prefers open spaces</div>
                   {canSnake ? <>
                     <div><strong style={{ color: '#DDAA00' }}>Snake mode:</strong> enabled</div>
-                    <div>• First snake move: +{snakePenalty.toFixed(1)} cost</div>
-                    <div>• Continued snaking: +{(snakePenalty * 0.15).toFixed(2)} cost</div>
-                    <div>• Reforming bonus: +{(snakePenalty * 0.3).toFixed(2)} cost</div>
+                    <div>• First snake move: +{(snakePenalty * Math.sqrt(unitSize)).toFixed(2)} cost</div>
+                    <div>• Continued snaking: +{(snakePenalty * Math.sqrt(unitSize) * 0.15).toFixed(2)} cost</div>
+                    <div>• Scale factor: √{unitSize} = {Math.sqrt(unitSize).toFixed(2)}×</div>
+                    <div>• Reforming: uses clearance cost (no snake penalty)</div>
                     <div style={{ color: '#fff', marginTop: '4px' }}>White path = snaking through tight spaces</div>
                   </> : <>
                     <div><strong style={{ color: '#DDAA00' }}>Snake mode:</strong> disabled</div>
@@ -1194,8 +2142,8 @@ function PathfindingVisualizer() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ color: '#b0bec5' }}>Optimal:</span>
-                <span style={{ color: ['dijkstra', 'bfs'].includes(selectedAlgorithm) || (selectedAlgorithm === 'aStar' && heuristicWeight <= 1) ? '#4caf50' : '#EE7733', fontWeight: 'bold' }}>
-                  {['dijkstra', 'bfs'].includes(selectedAlgorithm) || (selectedAlgorithm === 'aStar' && heuristicWeight <= 1) ? 'Yes' : selectedAlgorithm === 'aStar' ? 'w≤1 only' : 'No'}
+                <span style={{ color: ['dijkstra', 'aStar', 'flowField'].includes(selectedAlgorithm) ? '#4caf50' : selectedAlgorithm === 'bfs' ? '#ffc107' : '#EE7733', fontWeight: 'bold' }}>
+                  {['dijkstra', 'aStar', 'flowField'].includes(selectedAlgorithm) ? 'Yes' : selectedAlgorithm === 'bfs' ? 'Yes (unweighted)' : 'No'}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1231,6 +2179,13 @@ function PathfindingVisualizer() {
                    'Priority Queue (Min-Heap)'}
                 </span>
               </div>
+              {smoothPath && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#b0bec5' }}>Path Smoothing:</span>
+                  <span style={{ color: '#9c27b0', fontWeight: 'bold' }}>Active</span>
+                  <span style={{ color: '#78909c', fontSize: '10px' }}>(fewer waypoints)</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
