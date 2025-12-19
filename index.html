@@ -279,30 +279,28 @@ const GridUtils = {
   },
   // Calculate formation width perpendicular to a given travel direction
   getFormationWidthForDirection: (gridType, unitSize, orientation, travelAngle, cellSize) => {
-    if (unitSize === 1) return cellSize * 0.6;
+    if (unitSize === 1) return cellSize * 0.8;
     
     // Get formation cells
     const cells = GridUtils.getFormationCells(gridType, 0, 0, unitSize, orientation);
-    if (cells.length <= 1) return cellSize * 0.6;
+    if (cells.length <= 1) return cellSize * 0.8;
     
     // Convert cells to pixel positions
     const pixelCells = cells.map(c => GridUtils.cellToPixel(gridType, c.q, c.r, cellSize));
     
-    // Calculate perpendicular direction to travel
-    const perpAngle = travelAngle + Math.PI / 2;
-    const perpX = Math.cos(perpAngle);
-    const perpY = Math.sin(perpAngle);
-    
-    // Project all cells onto perpendicular axis and find extent
-    let minProj = Infinity, maxProj = -Infinity;
+    // Calculate the maximum extent of the formation (bounding box)
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of pixelCells) {
-      const proj = p.x * perpX + p.y * perpY;
-      minProj = Math.min(minProj, proj);
-      maxProj = Math.max(maxProj, proj);
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
     }
     
-    // Return full width (extent + cell size for the cells themselves)
-    return (maxProj - minProj) + cellSize;
+    // Return formation extent (this is center-to-center, add some for cell radius)
+    const extentX = maxX - minX;
+    const extentY = maxY - minY;
+    return Math.max(extentX, extentY) + cellSize * 0.5;
   },
   isPerpendicularMove: (gridType, unitSize, orientation, dirIndex) => {
     const oblong = GridUtils.getOblongFormation(gridType, unitSize);
@@ -490,97 +488,79 @@ const GridUtils = {
     
     return true;
   },
-  // Smooth a path using LOS checks - reduces waypoints while maintaining clearance
-  // Returns the full visual path (all hexes along smooth lines) with waypoint markers
-  smoothPath: (grid, gridType, path, unitSize) => {
-    if (!path || path.length <= 2) return { visualPath: path, waypoints: path ? [...path] : [] };
+  // Find waypoints (direction changes) in a path - for marker display only
+  extractPathWaypoints: (path) => {
+    if (!path || path.length <= 2) return path ? [...path] : [];
+    if (!path[0]?.key) return [...path];
     
-    // Validate path nodes have required properties
-    if (!path[0]?.key) return { visualPath: path, waypoints: [...path] };
+    const waypoints = [path[0]]; // Always include start
     
-    // First, find the waypoints (nodes we must pass through)
-    const waypoints = [path[0]];
-    let current = 0;
-    
-    while (current < path.length - 1) {
-      const fromNode = path[current];
-      if (!fromNode?.key) { current++; continue; }
+    for (let i = 1; i < path.length - 1; i++) {
+      const prev = path[i - 1];
+      const curr = path[i];
+      const next = path[i + 1];
       
-      const fromPos = GridUtils.parseKey(fromNode.key);
-      const fromOrient = fromNode.orientation || 0;
-      const fromCompact = fromNode.isCompact !== false;
+      if (!prev?.key || !curr?.key || !next?.key) continue;
       
-      // Find furthest visible node
-      let furthest = current + 1;
+      const prevPos = GridUtils.parseKey(prev.key);
+      const currPos = GridUtils.parseKey(curr.key);
+      const nextPos = GridUtils.parseKey(next.key);
       
-      for (let i = path.length - 1; i > current + 1; i--) {
-        const toNode = path[i];
-        if (!toNode?.key) continue;
-        
-        const toPos = GridUtils.parseKey(toNode.key);
-        const toOrient = toNode.orientation || 0;
-        const toCompact = toNode.isCompact !== false;
-        
-        let hasLOS = false;
-        
-        if (fromCompact && toCompact) {
-          hasLOS = GridUtils.formationHasLOS(grid, gridType, fromPos.q, fromPos.r, toPos.q, toPos.r, unitSize, fromOrient, toOrient);
-        } else {
-          hasLOS = GridUtils.hasLineOfSight(grid, gridType, fromPos.q, fromPos.r, toPos.q, toPos.r);
-        }
-        
-        if (hasLOS) {
-          furthest = i;
-          break;
-        }
-      }
+      // Check if direction changed
+      const d1q = currPos.q - prevPos.q, d1r = currPos.r - prevPos.r;
+      const d2q = nextPos.q - currPos.q, d2r = nextPos.r - currPos.r;
+      const directionChanged = d1q !== d2q || d1r !== d2r;
       
-      current = furthest;
-      if (path[current]) waypoints.push(path[current]);
-    }
-    
-    // Now expand waypoints back into a full visual path by interpolating between them
-    if (waypoints.length <= 1) return { visualPath: path, waypoints };
-    
-    const visualPath = [];
-    for (let w = 0; w < waypoints.length - 1; w++) {
-      const fromWp = waypoints[w];
-      const toWp = waypoints[w + 1];
-      const fromPos = GridUtils.parseKey(fromWp.key);
-      const toPos = GridUtils.parseKey(toWp.key);
+      // Check if compactness changed (snake transition)
+      const compactnessChanged = (prev.isCompact !== false) !== (curr.isCompact !== false);
       
-      // Get all hexes along the line between waypoints
-      const lineCells = gridType === 'hex' 
-        ? GridUtils.getHexLine(fromPos.q, fromPos.r, toPos.q, toPos.r)
-        : GridUtils.getSquareLine(fromPos.q, fromPos.r, toPos.q, toPos.r);
-      
-      // Add each cell along the line (except last to avoid duplicates)
-      for (let i = 0; i < lineCells.length - 1; i++) {
-        const cell = lineCells[i];
-        const key = GridUtils.cellKey(cell.q, cell.r);
-        // Interpolate orientation if both endpoints have orientations
-        const t = lineCells.length > 1 ? i / (lineCells.length - 1) : 0;
-        const fromOrient = fromWp.orientation || 0;
-        const toOrient = toWp.orientation || 0;
-        const orientation = Math.round(fromOrient + (toOrient - fromOrient) * t);
-        
-        visualPath.push({
-          key,
-          isCompact: fromWp.isCompact !== false && toWp.isCompact !== false,
-          orientation,
-          isWaypoint: i === 0 // Mark first cell of each segment as waypoint
-        });
+      if (directionChanged || compactnessChanged) {
+        waypoints.push(curr);
       }
     }
     
-    // Add the final waypoint
-    const lastWp = waypoints[waypoints.length - 1];
-    visualPath.push({
-      ...lastWp,
-      isWaypoint: true
-    });
+    waypoints.push(path[path.length - 1]); // Always include end
+    return waypoints;
+  },
+  // LOS-based waypoint reduction - drops unnecessary waypoints where straight lines work
+  // This is actual post-processing that modifies the path, keeping only essential waypoints
+  reducePathByLOS: (path, grid, gridType) => {
+    if (!path || path.length <= 2) return path ? [...path] : [];
+    if (!path[0]?.key) return [...path];
     
-    return { visualPath, waypoints };
+    const reduced = [path[0]]; // Always include start
+    let anchor = 0; // Current anchor point we're checking LOS from
+    
+    for (let i = 2; i < path.length; i++) {
+      const anchorPos = GridUtils.parseKey(path[anchor].key);
+      const currentPos = GridUtils.parseKey(path[i].key);
+      const prevPos = GridUtils.parseKey(path[i - 1].key);
+      
+      // Check if we have LOS from anchor to current position
+      const hasLOS = GridUtils.hasLineOfSight(grid, gridType, anchorPos.q, anchorPos.r, currentPos.q, currentPos.r);
+      
+      // Check if compactness changes (snake transitions must be preserved)
+      const prevCompact = path[i - 1].isCompact !== false;
+      const currCompact = path[i].isCompact !== false;
+      const compactnessChanging = prevCompact !== currCompact;
+      
+      // If LOS blocked or compactness changing, keep the waypoint
+      if (!hasLOS || compactnessChanging) {
+        const lastAdded = reduced[reduced.length - 1];
+        if (path[i - 1].key !== lastAdded.key) {
+          reduced.push(path[i - 1]);
+        }
+        anchor = i - 1;
+      }
+    }
+    
+    // Always include end
+    const lastAdded = reduced[reduced.length - 1];
+    if (path[path.length - 1].key !== lastAdded.key) {
+      reduced.push(path[path.length - 1]);
+    }
+    
+    return reduced;
   },
   // Helper for square grid line drawing
   getSquareLine: (q1, r1, q2, r2) => {
@@ -1148,13 +1128,14 @@ function PathfindingVisualizer() {
   const [unitSize, setUnitSize] = useState(1);
   const [canSnake, setCanSnake] = useState(false);
   const [snakePenalty, setSnakePenalty] = useState(1.5);
-  const [smoothPath, setSmoothPath] = useState(false);
+  const [showRibbon, setShowRibbon] = useState(false);
   const [heuristicWeight, setHeuristicWeight] = useState(1);
   const [showCellNumbers, setShowCellNumbers] = useState(false);
   const [showCostOverlay, setShowCostOverlay] = useState(false);
   const [costField, setCostField] = useState(new Map());
   const [flowVectors, setFlowVectors] = useState(new Map());
-  const [smoothWaypoints, setSmoothWaypoints] = useState([]);
+  const [visualPath, setVisualPath] = useState([]); // Full path for ribbon drawing
+  const [reducedWaypoints, setReducedWaypoints] = useState([]); // LOS-reduced waypoints for smooth ribbon
   const [showFlowVectors, setShowFlowVectors] = useState(true);
   const [hasVisualized, setHasVisualized] = useState(false);
   const [wallEditMode, setWallEditMode] = useState(null);
@@ -1183,9 +1164,19 @@ function PathfindingVisualizer() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Compute LOS-reduced waypoints when path or ribbon state changes
+  useEffect(() => {
+    if (showRibbon && visualPath.length > 2) {
+      const reduced = GridUtils.reducePathByLOS(visualPath, grid, gridType);
+      setReducedWaypoints(reduced);
+    } else {
+      setReducedWaypoints([]);
+    }
+  }, [visualPath, showRibbon, grid, gridType]);
+
   const svgRef = useRef(null);
   const animationRef = useRef([]);
-  const prevSettingsRef = useRef({ heuristicWeight, snakePenalty, canSnake, smoothPath, unitSize, selectedAlgorithm, gridType, heuristic, startOrientation, endOrientation });
+  const prevSettingsRef = useRef({ heuristicWeight, snakePenalty, canSnake, showRibbon, unitSize, selectedAlgorithm, gridType, heuristic, startOrientation, endOrientation });
 
   const CELL_SIZE = gridType === 'hex' ? 18 : 14;
   const SVG_WIDTH = 1200, SVG_HEIGHT = 800;
@@ -1238,7 +1229,7 @@ function PathfindingVisualizer() {
   const clearPath = useCallback(() => {
     clearAnimations();
     setGrid(prev => { const newGrid = new Map(prev); for (const [key, node] of newGrid) newGrid.set(key, { ...node, isVisited: false, isPath: false, animationState: 'none' }); return newGrid; });
-    setStats({ visited: 0, pathLength: 0, time: 0 }); setFlowVectors(new Map()); setCostField(new Map()); setSmoothWaypoints([]);
+    setStats({ visited: 0, pathLength: 0, time: 0 }); setFlowVectors(new Map()); setCostField(new Map()); setVisualPath([]); setReducedWaypoints([]);
   }, [clearAnimations]);
   const clearBoard = useCallback(() => {
     clearAnimations();
@@ -1246,7 +1237,7 @@ function PathfindingVisualizer() {
     const defaultStart = gridType === 'hex' ? { q: -14, r: 0 } : { q: -16, r: 0 };
     const defaultEnd = gridType === 'hex' ? { q: 14, r: 0 } : { q: 16, r: 0 };
     setStartNode(defaultStart); setEndNode(defaultEnd);
-    setHasVisualized(false); setFlowVectors(new Map()); setCostField(new Map()); setStats({ visited: 0, pathLength: 0, time: 0 }); setSmoothWaypoints([]);
+    setHasVisualized(false); setFlowVectors(new Map()); setCostField(new Map()); setStats({ visited: 0, pathLength: 0, time: 0 }); setVisualPath([]); setReducedWaypoints([]);
   }, [clearAnimations, initializeGrid, gridType]);
 
   const reconstructPath = (previous, endKey, startKey, formationState = null, orientationState = null) => {
@@ -1332,23 +1323,23 @@ function PathfindingVisualizer() {
       const algoResult = runSelectedAlgorithm(algorithmGrid, startNode, endNode, startOrientation);
       let path;
       if (selectedAlgorithm === 'flowField' && algoResult.path) { path = algoResult.path; setFlowVectors(algoResult.flowVectors || new Map()); }
-      else path = reconstructPath(algoResult.previous, algoResult.endKey, startKey, algoResult.formationState, algoResult.orientationState);
+      else {
+        path = reconstructPath(algoResult.previous, algoResult.endKey, startKey, algoResult.formationState, algoResult.orientationState);
+      }
       result = { visited: algoResult.visited, path, gScore: selectedAlgorithm === 'flowField' ? (algoResult.costField || new Map()) : (algoResult.gScore || new Map()) };
     }
-    // Apply path smoothing if enabled
-    if (smoothPath && result.path.length > 2) {
-      const smoothResult = GridUtils.smoothPath(algorithmGrid, gridType, result.path, unitSize);
-      result.path = smoothResult.visualPath;
-      setSmoothWaypoints(smoothResult.waypoints);
+    // Store path data for ribbon visualization
+    if (result.path.length > 0) {
+      setVisualPath([...result.path]);
     } else {
-      setSmoothWaypoints([]);
+      setVisualPath([]);
     }
     if (selectedAlgorithm !== 'flowField') setFlowVectors(new Map());
     setCostField(result.gScore || new Map());
     setStats({ visited: result.visited.length, pathLength: result.path.length, time: Math.round(performance.now() - startTime) });
     animateAlgorithm(result.visited, result.path, unitSize);
     setHasVisualized(true);
-  }, [grid, startNode, endNode, selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, smoothPath, isRunning, clearPath, animateAlgorithm, gridType, heuristic, startOrientation]);
+  }, [grid, startNode, endNode, selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, isRunning, clearPath, animateAlgorithm, gridType, heuristic, startOrientation]);
 
   const runInstantRecalc = useCallback((gridState, newStart, newEnd) => {
     const algorithmGrid = new Map();
@@ -1369,15 +1360,8 @@ function PathfindingVisualizer() {
       const algoResult = selectedAlgorithm === 'greedyBestFirst' ? Algorithms.greedyBestFirst(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty) : selectedAlgorithm === 'bfs' ? Algorithms.bfs(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake) : selectedAlgorithm === 'dfs' ? Algorithms.dfs(algorithmGrid, newStart, newEnd, gridType, unitSize, canSnake) : selectedAlgorithm === 'swarm' ? Algorithms.swarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty) : Algorithms.convergentSwarm(algorithmGrid, newStart, newEnd, gridType, heuristic, unitSize, canSnake, snakePenalty);
       path = reconstructPath(algoResult.previous, algoResult.endKey, sKey, algoResult.formationState); gScore = algoResult.gScore || new Map(); algoResult.visited.forEach(vKey => { const node = algorithmGrid.get(vKey); if (node) algorithmGrid.set(vKey, { ...node, isVisited: true }); });
     }
-    // Apply path smoothing if enabled
-    let waypoints = [];
-    if (smoothPath && path.length > 2) {
-      const smoothResult = GridUtils.smoothPath(algorithmGrid, gridType, path, unitSize);
-      path = smoothResult.visualPath;
-      waypoints = smoothResult.waypoints;
-    }
-    return { path, gScore, algorithmGrid, waypoints };
-  }, [selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, smoothPath, gridType, heuristic, startOrientation]);
+    return { path, gScore, algorithmGrid };
+  }, [selectedAlgorithm, heuristicWeight, unitSize, canSnake, snakePenalty, gridType, heuristic, startOrientation]);
 
   const handleCellInteraction = useCallback((q, r, isClick = false) => {
     if (isRunning) return;
@@ -1396,8 +1380,8 @@ function PathfindingVisualizer() {
       
       if (hasVisualized) {
         for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-        const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, endNode);
-        setSmoothWaypoints(waypoints || []);
+        const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, endNode);
+        setVisualPath([...path]);
         for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const pathNode of path) {
@@ -1423,9 +1407,9 @@ function PathfindingVisualizer() {
       let newGScore = new Map();
       if (hasVisualized) {
         for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-        const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, newStart, endNode);
+        const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, newStart, endNode);
         newGScore = gScore;
-        setSmoothWaypoints(waypoints || []);
+        setVisualPath([...path]);
         for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const pathNode of path) {
@@ -1451,9 +1435,9 @@ function PathfindingVisualizer() {
       let newGScore = new Map();
       if (hasVisualized) {
         for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-        const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, newEnd);
+        const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, newEnd);
         newGScore = gScore;
-        setSmoothWaypoints(waypoints || []);
+        setVisualPath([...path]);
         for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
         for (const pathNode of path) {
@@ -1480,8 +1464,8 @@ function PathfindingVisualizer() {
         // Recalculate path if we have a visualization
         if (hasVisualized) {
           for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-          const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, endNode);
-          setSmoothWaypoints(waypoints || []);
+          const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, endNode);
+          setVisualPath([...path]);
           for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
           for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
           for (const pathNode of path) {
@@ -1502,15 +1486,16 @@ function PathfindingVisualizer() {
 
   useEffect(() => {
     const prev = prevSettingsRef.current;
-    const settingsChanged = prev.heuristicWeight !== heuristicWeight || prev.snakePenalty !== snakePenalty || prev.canSnake !== canSnake || prev.smoothPath !== smoothPath || prev.unitSize !== unitSize || prev.selectedAlgorithm !== selectedAlgorithm || prev.gridType !== gridType || prev.heuristic !== heuristic || prev.startOrientation !== startOrientation || prev.endOrientation !== endOrientation;
-    prevSettingsRef.current = { heuristicWeight, snakePenalty, canSnake, smoothPath, unitSize, selectedAlgorithm, gridType, heuristic, startOrientation, endOrientation };
+    // Note: showRibbon is not included here - it's purely visual and doesn't affect path calculation
+    const settingsChanged = prev.heuristicWeight !== heuristicWeight || prev.snakePenalty !== snakePenalty || prev.canSnake !== canSnake || prev.unitSize !== unitSize || prev.selectedAlgorithm !== selectedAlgorithm || prev.gridType !== gridType || prev.heuristic !== heuristic || prev.startOrientation !== startOrientation || prev.endOrientation !== endOrientation;
+    prevSettingsRef.current = { heuristicWeight, snakePenalty, canSnake, showRibbon, unitSize, selectedAlgorithm, gridType, heuristic, startOrientation, endOrientation };
     if (!settingsChanged || !hasVisualized || isRunning) return;
-    let computedGScore = new Map(), computedPathLength = 0, computedWaypoints = [];
+    let computedGScore = new Map(), computedPathLength = 0, computedPath = [];
     setGrid(currentGrid => {
       const newGrid = new Map(currentGrid);
       for (const [k, n] of newGrid) if (n.animationState !== 'none' || n.isVisited) newGrid.set(k, { ...n, isVisited: false, isPath: false, animationState: 'none' });
-      const { path, gScore, algorithmGrid, waypoints } = runInstantRecalc(newGrid, startNode, endNode);
-      computedGScore = gScore; computedPathLength = path.length; computedWaypoints = waypoints || [];
+      const { path, gScore, algorithmGrid } = runInstantRecalc(newGrid, startNode, endNode);
+      computedGScore = gScore; computedPathLength = path.length; computedPath = [...path];
       for (const [k, n] of algorithmGrid) if (n.isVisited && newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd) newGrid.set(k, { ...existing, animationState: 'visited' }); }
       for (const [k] of gScore) if (newGrid.has(k)) { const existing = newGrid.get(k); if (!existing.isStart && !existing.isEnd && !existing.isWall && existing.animationState === 'none') newGrid.set(k, { ...existing, animationState: 'visited' }); }
       for (const pathNode of path) {
@@ -1523,8 +1508,8 @@ function PathfindingVisualizer() {
       }
       return newGrid;
     });
-    setCostField(computedGScore); setStats(s => ({ ...s, pathLength: computedPathLength })); setSmoothWaypoints(computedWaypoints);
-  }, [heuristicWeight, snakePenalty, canSnake, smoothPath, unitSize, selectedAlgorithm, hasVisualized, isRunning, startNode, endNode, runInstantRecalc, gridType, heuristic, startOrientation, endOrientation]);
+    setCostField(computedGScore); setStats(s => ({ ...s, pathLength: computedPathLength })); setVisualPath(computedPath);
+  }, [heuristicWeight, snakePenalty, canSnake, unitSize, selectedAlgorithm, hasVisualized, isRunning, startNode, endNode, runInstantRecalc, gridType, heuristic, startOrientation, endOrientation]);
 
   const handleMouseDown = (q, r) => handleCellInteraction(q, r, true);
   const handleMouseEnter = (q, r) => { setHoveredHex({ q, r }); if (isDragging) handleCellInteraction(q, r, false); };
@@ -1673,7 +1658,7 @@ function PathfindingVisualizer() {
           )}
         </div>
         {['aStar', 'greedyBestFirst', 'swarm', 'convergentSwarm', 'bidirectionalSwarm'].includes(selectedAlgorithm) && <select value={heuristic} onChange={(e) => setHeuristic(e.target.value)} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{gridConfig.heuristics.map(h => <option key={h} value={h}>{getHeuristicLabel(h)}</option>)}</select>}
-        {selectedAlgorithm === 'aStar' && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(100, 181, 246, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #1e88e5' }}><span style={{ fontSize: '10px', color: '#90a4ae' }}>w:</span><input type="range" min="0" max="10" step="0.1" value={heuristicWeight} onChange={(e) => setHeuristicWeight(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '80px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#88CCEE' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: heuristicWeight <= 1 ? '#88CCEE' : heuristicWeight < 3 ? '#DDAA00' : '#EE7733', minWidth: '30px' }}>{heuristicWeight >= 10 ? '∞' : heuristicWeight.toFixed(1)}</span></div>}
+        {['aStar'].includes(selectedAlgorithm) && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(100, 181, 246, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #1e88e5' }}><span style={{ fontSize: '10px', color: '#90a4ae' }}>w:</span><input type="range" min="0" max="10" step="0.1" value={heuristicWeight} onChange={(e) => setHeuristicWeight(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '80px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#88CCEE' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: heuristicWeight <= 1 ? '#88CCEE' : heuristicWeight < 3 ? '#DDAA00' : '#EE7733', minWidth: '30px' }}>{heuristicWeight >= 10 ? '∞' : heuristicWeight.toFixed(1)}</span></div>}
         <button onClick={runAlgorithm} disabled={isRunning} style={{ background: 'linear-gradient(90deg, #0077BB, #88CCEE)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 20px', cursor: isRunning ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '14px', boxShadow: '0 2px 8px rgba(0, 119, 187, 0.4)' }}>{isRunning ? 'Running...' : 'Visualize!'}</button>
         <button onClick={clearPath} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Clear Path</button>
         <button onClick={clearBoard} disabled={isRunning} style={{ background: '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Clear Board</button>
@@ -1706,7 +1691,7 @@ function PathfindingVisualizer() {
         )}
         <div style={{ width: '100px', display: 'flex', justifyContent: 'center' }}>{GridUtils.isMultiUnit(unitSize) ? <button onClick={() => setCanSnake(!canSnake)} disabled={isRunning} style={{ background: canSnake ? '#DDAA00' : '#16213e', color: canSnake ? '#000' : '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: canSnake ? 'bold' : 'normal', width: '100%' }}>{canSnake ? '🐍 Snake ✓' : '🐍 Snake'}</button> : <span style={{ color: '#455a64', fontSize: '11px' }}>(1-unit)</span>}</div>
         {GridUtils.isMultiUnit(unitSize) && canSnake && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(221, 170, 0, 0.15)', padding: '4px 10px', borderRadius: '4px', border: '1px solid #DDAA00' }}><span style={{ fontSize: '11px', color: '#DDAA00' }}>Cost:</span><input type="range" min="0" max="10" step="0.5" value={snakePenalty} onChange={(e) => setSnakePenalty(parseFloat(e.target.value))} disabled={isRunning} style={{ width: '60px', cursor: isRunning ? 'not-allowed' : 'pointer', accentColor: '#DDAA00' }} /><span style={{ fontSize: '11px', fontWeight: 'bold', color: '#DDAA00' }}>{snakePenalty.toFixed(1)}</span></div>}
-        <button onClick={() => setSmoothPath(!smoothPath)} disabled={isRunning} style={{ background: smoothPath ? '#9c27b0' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: smoothPath ? 'bold' : 'normal' }}>{smoothPath ? '〰️ Smooth ✓' : '〰️ Smooth'}</button>
+        <button onClick={() => setShowRibbon(!showRibbon)} disabled={isRunning} style={{ background: showRibbon ? '#9c27b0' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: isRunning ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: showRibbon ? 'bold' : 'normal' }}>{showRibbon ? '🎀 Ribbon ✓' : '🎀 Ribbon'}</button>
         <div style={{ width: '1px', height: '24px', background: '#0f3460' }} />
         <button onClick={() => setShowCellNumbers(!showCellNumbers)} style={{ background: showCellNumbers ? '#2196f3' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showCellNumbers ? '🔢 Coords ✓' : '🔢 Coords'}</button>
         <button onClick={() => { setShowCostOverlay(!showCostOverlay); if (!showCostOverlay && selectedAlgorithm === 'flowField') setShowFlowVectors(false); }} style={{ background: showCostOverlay ? '#e91e63' : '#16213e', color: '#e8e8e8', border: '1px solid #0f3460', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontSize: '13px' }}>{showCostOverlay ? '💰 Costs ✓' : '💰 Costs'}</button>
@@ -1718,22 +1703,30 @@ function PathfindingVisualizer() {
       </div>
       <div className="grid-container" style={{ display: 'flex', justifyContent: 'center', padding: '10px', background: '#0a0a1a', userSelect: 'none', overflow: 'auto', WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}><svg ref={svgRef} width={SVG_WIDTH} height={SVG_HEIGHT} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} style={{ background: '#0d0d1a', borderRadius: '8px', userSelect: 'none', flexShrink: 0, touchAction: isDragging ? 'none' : 'pan-x pan-y' }} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onDragStart={(e) => e.preventDefault()}>
         {Array.from(grid.values()).map(node => renderCell(node))}
-        {/* Smooth path line overlay */}
-        {smoothPath && smoothWaypoints.length > 1 && (() => {
-          // Convert waypoints to pixel coordinates with pathfinding data
-          const waypoints = smoothWaypoints.map(wp => {
-            const pos = GridUtils.parseKey(wp.key);
+        {/* Smooth path ribbon overlay */}
+        {showRibbon && visualPath.length > 1 && (() => {
+          // Use LOS-reduced waypoints for ribbon drawing (smoother, fewer segments)
+          const pathSource = reducedWaypoints.length > 1 ? reducedWaypoints : visualPath;
+          
+          // Convert path to pixel coordinates
+          const pathPoints = pathSource.map(node => {
+            const pos = GridUtils.parseKey(node.key);
             const pixel = GridUtils.cellToPixel(gridType, pos.q, pos.r, CELL_SIZE);
             return { 
               x: pixel.x + offsetX, 
               y: pixel.y + offsetY,
-              orientation: wp.orientation || 0,
-              isCompact: wp.isCompact !== false
+              orientation: node.orientation || 0,
+              isCompact: node.isCompact !== false
             };
           });
           
-          // Helper to check if a pixel position is inside a wall
-          const isPixelInWall = (px, py) => {
+          if (pathPoints.length < 2) return null;
+          
+          // Calculate ribbon width from formation size
+          const compactWidth = GridUtils.getFormationWidthForDirection(gridType, unitSize, 0, 0, CELL_SIZE);
+          
+          // Helper to check if a pixel position is inside a wall or off-grid
+          const isPixelBlocked = (px, py) => {
             const localX = px - offsetX;
             const localY = py - offsetY;
             let cell;
@@ -1747,205 +1740,241 @@ function PathfindingVisualizer() {
             }
             const key = GridUtils.cellKey(cell.q, cell.r);
             const node = grid.get(key);
+            // Blocked if wall OR missing (off grid)
             return !node || node.isWall;
           };
           
-          // Find safe offset distance (binary search)
-          const findSafeOffset = (cx, cy, nx, ny, maxOffset) => {
-            if (maxOffset <= 0) return 0;
-            if (!isPixelInWall(cx + nx * maxOffset, cy + ny * maxOffset)) {
-              return maxOffset;
-            }
-            let lo = 0, hi = maxOffset;
-            for (let i = 0; i < 8; i++) {
-              const mid = (lo + hi) / 2;
-              if (isPixelInWall(cx + nx * mid, cy + ny * mid)) {
-                hi = mid;
-              } else {
-                lo = mid;
+          // Find max safe distance by checking multiple points along the ray
+          const findSafeDistance = (cx, cy, nx, ny, maxDist) => {
+            if (maxDist <= 0) return 0;
+            const stepSize = CELL_SIZE * 0.25; // Check every ~25% of a cell
+            let safeDist = 0;
+            
+            for (let d = stepSize; d <= maxDist; d += stepSize) {
+              if (isPixelBlocked(cx + nx * d, cy + ny * d)) {
+                // Found a wall - return distance minus margin
+                return Math.max(0, safeDist);
               }
+              safeDist = d;
             }
-            return Math.max(0, lo - 2);
+            
+            // Check final point
+            if (!isPixelBlocked(cx + nx * maxDist, cy + ny * maxDist)) {
+              return maxDist;
+            }
+            return Math.max(0, safeDist);
           };
           
-          // Check if three points are roughly collinear (straight line)
-          const isCollinear = (p0, p1, p2, threshold = 0.15) => {
-            const v1x = p1.x - p0.x, v1y = p1.y - p0.y;
-            const v2x = p2.x - p1.x, v2y = p2.y - p1.y;
-            const len1 = Math.sqrt(v1x * v1x + v1y * v1y) || 1;
-            const len2 = Math.sqrt(v2x * v2x + v2y * v2y) || 1;
-            // Cross product gives sin of angle between vectors
-            const cross = (v1x / len1) * (v2y / len2) - (v1y / len1) * (v2x / len2);
-            return Math.abs(cross) < threshold;
-          };
-          
-          // Generate path samples - straight lines with curves only at actual turns
-          const generatePathSamples = (pts) => {
-            if (pts.length < 2) return pts;
-            if (pts.length === 2) {
-              // Simple linear interpolation
-              const samples = [];
-              const numSamples = 20;
-              for (let i = 0; i <= numSamples; i++) {
-                const t = i / numSamples;
-                samples.push({
-                  x: pts[0].x + (pts[1].x - pts[0].x) * t,
-                  y: pts[0].y + (pts[1].y - pts[0].y) * t,
-                  orientation: Math.round(pts[0].orientation + (pts[1].orientation - pts[0].orientation) * t),
-                  isCompact: pts[0].isCompact && pts[1].isCompact
-                });
+          // Generate dense samples along the path with curved corners
+          const generateSamples = () => {
+            const samples = [];
+            const sampleDist = 8; // Sample every 8 pixels
+            const cornerRadius = CELL_SIZE * 1.2; // How much to round corners
+            
+            if (pathPoints.length < 2) return pathPoints;
+            
+            if (pathPoints.length === 2) {
+              // Just two points - straight line
+              const p1 = pathPoints[0], p2 = pathPoints[1];
+              const dx = p2.x - p1.x, dy = p2.y - p1.y;
+              const segLen = Math.sqrt(dx * dx + dy * dy);
+              const numSamples = Math.max(2, Math.ceil(segLen / sampleDist));
+              for (let j = 0; j <= numSamples; j++) {
+                const t = j / numSamples;
+                samples.push({ x: p1.x + dx * t, y: p1.y + dy * t, isCompact: p1.isCompact && p2.isCompact });
               }
               return samples;
             }
             
-            const samples = [];
-            
-            for (let i = 0; i < pts.length - 1; i++) {
-              const p1 = pts[i];
-              const p2 = pts[i + 1];
-              const p0 = pts[Math.max(0, i - 1)];
-              const p3 = pts[Math.min(pts.length - 1, i + 2)];
+            // Multiple waypoints - add curves at corners
+            for (let i = 0; i < pathPoints.length; i++) {
+              const prev = i > 0 ? pathPoints[i - 1] : null;
+              const curr = pathPoints[i];
+              const next = i < pathPoints.length - 1 ? pathPoints[i + 1] : null;
               
-              // Check if this segment should be curved (has actual turns at endpoints)
-              const hasTurnAtStart = i > 0 && !isCollinear(p0, p1, p2);
-              const hasTurnAtEnd = i < pts.length - 2 && !isCollinear(p1, p2, p3);
+              if (!prev) {
+                // Start point - just add it
+                samples.push({ ...curr });
+                continue;
+              }
               
-              const samplesInSegment = 20;
-              
-              for (let j = 0; j < samplesInSegment; j++) {
-                const t = j / samplesInSegment;
-                let x, y;
-                
-                if (!hasTurnAtStart && !hasTurnAtEnd) {
-                  // Straight segment - use linear interpolation
-                  x = p1.x + (p2.x - p1.x) * t;
-                  y = p1.y + (p2.y - p1.y) * t;
-                } else {
-                  // Curved segment - use bezier with minimal tension
-                  const tension = 0.2;
-                  
-                  const cp1x = p1.x + (hasTurnAtStart ? (p2.x - p0.x) * tension : (p2.x - p1.x) * 0.1);
-                  const cp1y = p1.y + (hasTurnAtStart ? (p2.y - p0.y) * tension : (p2.y - p1.y) * 0.1);
-                  const cp2x = p2.x - (hasTurnAtEnd ? (p3.x - p1.x) * tension : (p2.x - p1.x) * 0.1);
-                  const cp2y = p2.y - (hasTurnAtEnd ? (p3.y - p1.y) * tension : (p2.y - p1.y) * 0.1);
-                  
-                  const t2 = t * t, t3 = t2 * t;
-                  const mt = 1 - t, mt2 = mt * mt, mt3 = mt2 * mt;
-                  
-                  x = mt3 * p1.x + 3 * mt2 * t * cp1x + 3 * mt * t2 * cp2x + t3 * p2.x;
-                  y = mt3 * p1.y + 3 * mt2 * t * cp1y + 3 * mt * t2 * cp2y + t3 * p2.y;
+              if (!next) {
+                // End point - line from last sample to here
+                const lastSample = samples[samples.length - 1];
+                const dx = curr.x - lastSample.x, dy = curr.y - lastSample.y;
+                const segLen = Math.sqrt(dx * dx + dy * dy);
+                const numSamples = Math.max(1, Math.ceil(segLen / sampleDist));
+                for (let j = 1; j <= numSamples; j++) {
+                  const t = j / numSamples;
+                  samples.push({ x: lastSample.x + dx * t, y: lastSample.y + dy * t, isCompact: curr.isCompact });
                 }
-                
-                samples.push({
-                  x, y,
-                  orientation: Math.round(p1.orientation + (p2.orientation - p1.orientation) * t),
-                  isCompact: p1.isCompact && p2.isCompact
+                continue;
+              }
+              
+              // Middle waypoint - calculate corner curve
+              const toPrevX = prev.x - curr.x, toPrevY = prev.y - curr.y;
+              const toNextX = next.x - curr.x, toNextY = next.y - curr.y;
+              const prevDist = Math.sqrt(toPrevX * toPrevX + toPrevY * toPrevY) || 1;
+              const nextDist = Math.sqrt(toNextX * toNextX + toNextY * toNextY) || 1;
+              
+              // Calculate corner rounding distance
+              const roundDist = Math.min(cornerRadius, prevDist * 0.4, nextDist * 0.4);
+              
+              // Point where curve starts (coming from prev)
+              const curveStartX = curr.x + (toPrevX / prevDist) * roundDist;
+              const curveStartY = curr.y + (toPrevY / prevDist) * roundDist;
+              
+              // Point where curve ends (going to next)
+              const curveEndX = curr.x + (toNextX / nextDist) * roundDist;
+              const curveEndY = curr.y + (toNextY / nextDist) * roundDist;
+              
+              // Line from last sample to curve start
+              const lastSample = samples[samples.length - 1];
+              const dx1 = curveStartX - lastSample.x, dy1 = curveStartY - lastSample.y;
+              const seg1Len = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+              const numSamples1 = Math.max(1, Math.ceil(seg1Len / sampleDist));
+              for (let j = 1; j <= numSamples1; j++) {
+                const t = j / numSamples1;
+                samples.push({ 
+                  x: lastSample.x + dx1 * t, 
+                  y: lastSample.y + dy1 * t, 
+                  isCompact: prev.isCompact && curr.isCompact 
                 });
+              }
+              
+              // Quadratic bezier curve through the corner
+              const numCurveSamples = Math.max(4, Math.ceil(roundDist / sampleDist) * 2);
+              for (let j = 1; j <= numCurveSamples; j++) {
+                const t = j / numCurveSamples;
+                const mt = 1 - t;
+                // Quadratic bezier: (1-t)²·P0 + 2(1-t)t·P1 + t²·P2
+                const x = mt * mt * curveStartX + 2 * mt * t * curr.x + t * t * curveEndX;
+                const y = mt * mt * curveStartY + 2 * mt * t * curr.y + t * t * curveEndY;
+                samples.push({ x, y, isCompact: curr.isCompact });
               }
             }
             
-            // Add final point
-            const lastPt = pts[pts.length - 1];
-            samples.push({ x: lastPt.x, y: lastPt.y, orientation: lastPt.orientation, isCompact: lastPt.isCompact });
             return samples;
           };
           
-          // Generate ribbon with width based on formation and travel direction
-          const generateRibbon = (samples) => {
-            if (samples.length < 2) return { left: [], right: [], center: samples };
+          const samples = generateSamples();
+          
+          // Generate ribbon edges with smart wall avoidance
+          const leftEdge = [];
+          const rightEdge = [];
+          
+          for (let i = 0; i < samples.length; i++) {
+            const pt = samples[i];
             
-            const left = [];
-            const right = [];
-            
-            for (let i = 0; i < samples.length; i++) {
-              const pt = samples[i];
-              
-              // Calculate tangent/travel direction
-              let dx, dy;
-              if (i === 0) {
-                dx = samples[1].x - samples[0].x;
-                dy = samples[1].y - samples[0].y;
-              } else if (i === samples.length - 1) {
-                dx = samples[i].x - samples[i - 1].x;
-                dy = samples[i].y - samples[i - 1].y;
-              } else {
-                dx = samples[i + 1].x - samples[i - 1].x;
-                dy = samples[i + 1].y - samples[i - 1].y;
-              }
-              
-              const travelAngle = Math.atan2(dy, dx);
-              
-              // Get formation width perpendicular to travel direction
-              const halfWidth = GridUtils.getFormationWidthForDirection(
-                gridType, unitSize, pt.orientation, travelAngle, CELL_SIZE
-              ) / 2;
-              
-              // Perpendicular direction
-              const len = Math.sqrt(dx * dx + dy * dy) || 1;
-              const nx = -dy / len;
-              const ny = dx / len;
-              
-              // Find safe offsets (wall-constrained)
-              const leftOffset = findSafeOffset(pt.x, pt.y, nx, ny, halfWidth);
-              const rightOffset = findSafeOffset(pt.x, pt.y, -nx, -ny, halfWidth);
-              
-              left.push({ x: pt.x + nx * leftOffset, y: pt.y + ny * leftOffset });
-              right.push({ x: pt.x - nx * rightOffset, y: pt.y - ny * rightOffset });
+            // Calculate tangent direction from neighbors
+            let dx, dy;
+            if (i === 0) {
+              dx = samples[Math.min(1, samples.length - 1)].x - samples[0].x;
+              dy = samples[Math.min(1, samples.length - 1)].y - samples[0].y;
+            } else if (i === samples.length - 1) {
+              dx = samples[i].x - samples[Math.max(0, i - 1)].x;
+              dy = samples[i].y - samples[Math.max(0, i - 1)].y;
+            } else {
+              dx = samples[i + 1].x - samples[i - 1].x;
+              dy = samples[i + 1].y - samples[i - 1].y;
             }
             
-            return { left, right, center: samples };
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len; // Perpendicular (left)
+            const ny = dx / len;
+            
+            // Find available space on each side (always search full formation width)
+            const halfWidth = compactWidth / 2;
+            const leftSpace = findSafeDistance(pt.x, pt.y, nx, ny, compactWidth);
+            const rightSpace = findSafeDistance(pt.x, pt.y, -nx, -ny, compactWidth);
+            
+            let leftOffset, rightOffset;
+            
+            // Calculate how much width we want (compact = full, snaking = fill corridor)
+            const targetWidth = pt.isCompact ? compactWidth : Math.min(leftSpace + rightSpace, compactWidth);
+            const targetHalf = targetWidth / 2;
+            
+            // Distribute width, shifting away from walls
+            if (leftSpace >= targetHalf && rightSpace >= targetHalf) {
+              // Both sides have room - center it
+              leftOffset = targetHalf;
+              rightOffset = targetHalf;
+            } else if (leftSpace < targetHalf) {
+              // Wall on left - use what's available, extend right
+              leftOffset = leftSpace;
+              rightOffset = Math.min(rightSpace, targetWidth - leftOffset);
+            } else {
+              // Wall on right - use what's available, extend left  
+              rightOffset = rightSpace;
+              leftOffset = Math.min(leftSpace, targetWidth - rightOffset);
+            }
+            
+            leftEdge.push({ x: pt.x + nx * leftOffset, y: pt.y + ny * leftOffset });
+            rightEdge.push({ x: pt.x - nx * rightOffset, y: pt.y - ny * rightOffset });
+          }
+          
+          // Smooth the edges to reduce jaggedness
+          const smoothEdge = (edge, iterations = 2) => {
+            if (edge.length < 3) return edge;
+            let result = [...edge];
+            for (let iter = 0; iter < iterations; iter++) {
+              const smoothed = [result[0]]; // Keep first point
+              for (let i = 1; i < result.length - 1; i++) {
+                // Simple moving average with neighbors
+                smoothed.push({
+                  x: (result[i - 1].x + result[i].x * 2 + result[i + 1].x) / 4,
+                  y: (result[i - 1].y + result[i].y * 2 + result[i + 1].y) / 4
+                });
+              }
+              smoothed.push(result[result.length - 1]); // Keep last point
+              result = smoothed;
+            }
+            return result;
           };
           
-          const pathSamples = generatePathSamples(waypoints);
-          const ribbon = generateRibbon(pathSamples);
+          const smoothLeftEdge = smoothEdge(leftEdge);
+          const smoothRightEdge = smoothEdge(rightEdge);
           
-          // Create SVG paths
-          const ribbonPath = `M ${ribbon.left[0].x},${ribbon.left[0].y} ` +
-            ribbon.left.slice(1).map(p => `L ${p.x},${p.y}`).join(' ') +
-            ` L ${ribbon.right[ribbon.right.length - 1].x},${ribbon.right[ribbon.right.length - 1].y} ` +
-            ribbon.right.slice(0, -1).reverse().map(p => `L ${p.x},${p.y}`).join(' ') +
+          // Build ribbon polygon path
+          const ribbonPath = `M ${smoothLeftEdge[0].x},${smoothLeftEdge[0].y} ` +
+            smoothLeftEdge.slice(1).map(p => `L ${p.x},${p.y}`).join(' ') +
+            ` L ${smoothRightEdge[smoothRightEdge.length - 1].x},${smoothRightEdge[smoothRightEdge.length - 1].y} ` +
+            smoothRightEdge.slice(0, -1).reverse().map(p => `L ${p.x},${p.y}`).join(' ') +
             ' Z';
           
-          const centerPath = `M ${ribbon.center[0].x},${ribbon.center[0].y} ` +
-            ribbon.center.slice(1).map(p => `L ${p.x},${p.y}`).join(' ');
+          // Build center line path
+          const centerPath = `M ${samples[0].x},${samples[0].y} ` +
+            samples.slice(1).map(p => `L ${p.x},${p.y}`).join(' ');
+          
+          // Build edge paths for outline (use smoothed edges)
+          const leftPath = `M ${smoothLeftEdge[0].x},${smoothLeftEdge[0].y} ` +
+            smoothLeftEdge.slice(1).map(p => `L ${p.x},${p.y}`).join(' ');
+          const rightPath = `M ${smoothRightEdge[0].x},${smoothRightEdge[0].y} ` +
+            smoothRightEdge.slice(1).map(p => `L ${p.x},${p.y}`).join(' ');
           
           return (
-            <g>
-              <defs>
-                <linearGradient id="ribbonGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#FFDD44" stopOpacity="0.4" />
-                  <stop offset="50%" stopColor="#FFEE88" stopOpacity="0.5" />
-                  <stop offset="100%" stopColor="#FFDD44" stopOpacity="0.4" />
-                </linearGradient>
-              </defs>
+            <g style={{ pointerEvents: 'none' }}>
               {/* Ribbon fill */}
-              <path d={ribbonPath} fill="url(#ribbonGradient)" stroke="none" />
+              <path d={ribbonPath} fill="rgba(255, 235, 150, 0.6)" stroke="none" />
               {/* Ribbon edges */}
-              <path
-                d={`M ${ribbon.left[0].x},${ribbon.left[0].y} ` + ribbon.left.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')}
-                fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" opacity="0.6"
-              />
-              <path
-                d={`M ${ribbon.right[0].x},${ribbon.right[0].y} ` + ribbon.right.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')}
-                fill="none" stroke="#000" strokeWidth="2" strokeLinecap="round" opacity="0.6"
-              />
+              <path d={leftPath} fill="none" stroke="rgba(0, 0, 0, 0.7)" strokeWidth={2} strokeLinecap="round" />
+              <path d={rightPath} fill="none" stroke="rgba(0, 0, 0, 0.7)" strokeWidth={2} strokeLinecap="round" />
               {/* Center line */}
-              <path d={centerPath} fill="none" stroke="#000" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-              <path d={centerPath} fill="none" stroke="#FFDD44" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="1" />
+              <path d={centerPath} fill="none" stroke="rgba(180, 150, 50, 0.9)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
               {/* Waypoint markers */}
-              {waypoints.map((pt, idx) => {
-                const isEndpoint = idx === 0 || idx === waypoints.length - 1;
-                return (
-                  <g key={`waypoint-${idx}`}>
-                    <circle cx={pt.x} cy={pt.y} r={isEndpoint ? 10 : 8} fill="#000" opacity="0.8" />
-                    <circle
-                      cx={pt.x} cy={pt.y} r={isEndpoint ? 7 : 5}
-                      fill={isEndpoint ? (idx === 0 ? '#0077BB' : '#EE7733') : (pt.isCompact ? '#FFDD44' : '#CC66FF')}
-                      stroke="#fff" strokeWidth="2"
-                    />
-                  </g>
-                );
-              })}
+              {pathPoints.map((wp, i) => (
+                <g key={`wp-${i}`}>
+                  <circle cx={wp.x} cy={wp.y} r={7} fill="#000" opacity="0.7" />
+                  <circle
+                    cx={wp.x}
+                    cy={wp.y}
+                    r={5}
+                    fill={i === 0 ? '#0077BB' : i === pathPoints.length - 1 ? '#EE7733' : (wp.isCompact ? '#FFDD44' : '#CC66FF')}
+                    stroke="#fff"
+                    strokeWidth={2}
+                  />
+                </g>
+              ))}
             </g>
           );
         })()}
@@ -2179,11 +2208,11 @@ function PathfindingVisualizer() {
                    'Priority Queue (Min-Heap)'}
                 </span>
               </div>
-              {smoothPath && (
+              {showRibbon && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: '#b0bec5' }}>Path Smoothing:</span>
+                  <span style={{ color: '#b0bec5' }}>Path Ribbon:</span>
                   <span style={{ color: '#9c27b0', fontWeight: 'bold' }}>Active</span>
-                  <span style={{ color: '#78909c', fontSize: '10px' }}>(fewer waypoints)</span>
+                  <span style={{ color: '#78909c', fontSize: '10px' }}>(LOS-reduced: {reducedWaypoints.length} waypoints)</span>
                 </div>
               )}
             </div>
